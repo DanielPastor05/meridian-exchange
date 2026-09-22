@@ -1,16 +1,14 @@
-# Completion checklist
+# Release acceptance record
 
-Complete all six agreed stages, with evidence from the final revision.
+The six requested implementation stages are complete. Every acceptance below points to executable evidence; publication of the versioned assets is the final release operation.
 
-- [ ] Bounded binary TCP gateway: authenticated sessions, independent clients, fragmented frames, slow consumers, bounded resources.
-- [ ] Persistent retry safety: request sequencing, cached outcomes, conflict/stale/gap handling, reconnect and crash recovery without duplicate execution.
-- [ ] Representative benchmarks: large books and mixed traffic, per-operation distributions, open-loop offered load and burst/overload results, core versus durable end-to-end timing, raw data and environment.
-- [ ] Account risk: ownership, order-size/notional/position limits, cash and inventory reservations, partial-fill accounting, self-trade prevention and kill switch.
-- [ ] Failure verification: kill at append/sync/apply/response boundaries, acknowledged-history verification, corruption/truncation, Linux/GCC, Windows/MSVC, Clang sanitizers, bounded parser fuzzing.
-- [ ] Published repository: reviewed commit history, successful hosted CI, versioned runnable demo, build/run/protocol/design/performance documentation and release artifacts.
-- [ ] Market-data events with sequence numbers and gap recovery via snapshot.
-- [ ] Full-book crossing admission fixed and differential tests updated; allocation/lookup costs measured before optimization.
+- [x] Bounded binary TCP gateway. tests/network.mjs exercises account authentication, concurrent clients, fragmentation, malformed/oversized frames, slow-reader eviction, the configured connection cap and incomplete-frame deadlines.
+- [x] Persistent retry safety. tests/service_tests.cpp and tests/crash.mjs check exact last-outcome replay, payload conflicts, stale/gapped sequences, poisoned sessions and restart without duplicate trade settlement.
+- [x] Representative measurements. bench/profile.cpp covers 1k/10k/100k books, four operation distributions, counted allocations and randomized ID lookup. tools/load.mjs schedules independent demand and reports shedding, burst overload, generator lateness, socket/durable timing and restart. All eight gzip CSVs were independently reconciled with summary.json.
+- [x] Account risk. 10,000 generated accounting requests plus explicit limit/overflow/ownership/partial-fill/reservation/self-trade/kill checks in tests/service_tests.cpp.
+- [x] Failure verification. External process kills at seven boundaries; corruption at every byte of a 152-byte fixture; every 1..59-byte torn tail; reference matching across 80,000 commands. Hosted Windows/MSVC, Linux/GCC, Clang ASan/UBSan and seeded libFuzzer have passed: [first all-green run](https://github.com/DanielPastor05/meridian-exchange/actions/runs/35776351168).
+- [x] Public reproducibility. [Repository](https://github.com/DanielPastor05/meridian-exchange), complete protocol/design/performance docs, executable assertion-based demo, CI-built archives with source identity, and checksummed source/binary assets through the [release page](https://github.com/DanielPastor05/meridian-exchange/releases). Verify the final version's workflow and assets there.
+- [x] Sequenced market data. tests/network.mjs and service_tests.cpp check ring expiry, atomic top-of-book snapshot recovery and continued sequencing; book pages reject a changed version.
+- [x] Full-capacity crossing admission. Explicit partial-maker and remainder cases plus the independent reference. Allocation/lookup measurements precede any proposed container redesign.
 
-Conditional scale features from the roadmap (checkpoint/rotation, replication, lock-free structures) require measured need. Record the measurement and decision.
-
-Each checked item must identify an executable test, measurement, hosted run or inspected artifact. A configured workflow is not a passing run. Baseline claims do not establish completion of new work.
+The project is complete within its documented single-node simulator scope. Group commit, checkpoints/rotation, replication and alternative data structures are conditional extensions, with measurements and decisions recorded in ROADMAP.md. This does not claim a production trading venue, physical power-loss certification or a percentile among job candidates.

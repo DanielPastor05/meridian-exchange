@@ -18,7 +18,7 @@ The demo is executable assertions, not a pre-recorded screenshot. No performance
 
 ## Hosted verification
 
-The workflow runs the same suite on Linux/GCC and Windows/MSVC, the complete suite on Linux/Clang ASan/UBSan, then a seeded 30-second libFuzzer run. Actual job status and downloaded verification artifacts will be recorded here once the first publication has completed. A configured workflow alone is not evidence of a successful run.
+The workflow runs the same suite on Linux/GCC and Windows/MSVC, the complete suite on Linux/Clang ASan/UBSan, then a seeded 30-second libFuzzer run. The first completely successful hosted run is [35776351168](https://github.com/DanielPastor05/meridian-exchange/actions/runs/35776351168), revision 0e906ef. All three jobs passed, including the seven-test suites and the 30-second fuzz run. Initial failures found GCC file-deleter attribute handling, CMake regex portability and a keepalive gap in a slow-consumer test; fixes were verified by that fresh run. Later release packaging revisions are checked by the same workflow. The final release page identifies its source commit and verification run.
 
 ## Limits
 

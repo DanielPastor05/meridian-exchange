@@ -43,10 +43,15 @@ jobs:
           node -e 'console.log(JSON.stringify({commit:process.env.GITHUB_SHA,platform:process.platform,arch:process.arch,node:process.version},null,2))' > dist/BUILD-INFO.json
           if [ "${{ runner.os }}" = "Windows" ]; then cp build/Release/*.exe dist/bin/; else cp build/exchange build/exchange_server build/exchange_bench build/exchange_profile dist/bin/; fi
           cp -r tools tests examples docs README.md EMPIEZA-AQUI.md dist/
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            powershell -NoProfile -Command "Compress-Archive -Path dist/* -DestinationPath meridian-Windows.zip"
+          else
+            tar -czf meridian-Linux.tar.gz -C dist .
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: meridian-${{ runner.os }}
-          path: dist/
+          path: meridian-${{ runner.os }}.*
   sanitizers:
     runs-on: ubuntu-latest
     timeout-minutes: 15
