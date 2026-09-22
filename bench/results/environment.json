@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-22T18:57:25.052Z",
+  "cpu": "AMD Ryzen 5 5500",
+  "logicalProcessors": 12,
+  "os": "Windows 11 Pro",
+  "release": "10.0.26200",
+  "architecture": "x64",
+  "compiler": "MSVC 19.44.35228",
+  "cmake": "3.31.6-msvc6",
+  "configuration": "Release",
+  "commands": 2000000,
+  "repetitions": 5,
+  "affinity": "not pinned",
+  "powerPolicy": "not controlled",
+  "backgroundLoad": "normal desktop; no concurrent agent builds or tests"
+}

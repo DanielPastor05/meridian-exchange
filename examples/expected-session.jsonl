@@ -1,0 +1,9 @@
+{"type":"result","sequence":"1","id":"1","status":"accepted","remaining":"7","trades":[]}
+{"type":"result","sequence":"2","id":"2","status":"accepted","remaining":"5","trades":[]}
+{"type":"result","sequence":"3","id":"3","status":"accepted","remaining":"4","trades":[]}
+{"type":"result","sequence":"4","id":"4","status":"accepted","remaining":"0","trades":[{"maker":"1","taker":"4","price":"10005","quantity":"7"},{"maker":"2","taker":"4","price":"10005","quantity":"3"}]}
+{"type":"book","sequence":"4","state_hash":"7438611070441868121","orders":[{"id":"2","side":"SELL","price":"10005","quantity":"2"},{"id":"3","side":"SELL","price":"10010","quantity":"4"}]}
+{"type":"result","sequence":"5","id":"2","status":"cancelled","remaining":"0","trades":[]}
+{"type":"result","sequence":"6","id":"5","status":"accepted","remaining":"2","trades":[{"maker":"3","taker":"5","price":"10010","quantity":"4"}]}
+{"type":"book","sequence":"6","state_hash":"1032974127549716544","orders":[{"id":"5","side":"BUY","price":"10012","quantity":"2"}]}
+{"type":"book","sequence":"6","state_hash":"1032974127549716544","orders":[{"id":"5","side":"BUY","price":"10012","quantity":"2"}]}

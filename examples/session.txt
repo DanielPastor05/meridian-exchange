@@ -1,0 +1,9 @@
+# Prices are integer ticks. FIFO applies within each price level.
+NEW 1 SELL 10005 7
+NEW 2 SELL 10005 5
+NEW 3 SELL 10010 4
+NEW 4 BUY 10005 10
+BOOK
+CANCEL 2
+NEW 5 BUY 10012 6
+BOOK

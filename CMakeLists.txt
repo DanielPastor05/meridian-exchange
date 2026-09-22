@@ -1,0 +1,36 @@
+cmake_minimum_required(VERSION 3.20)
+project(meridian_exchange VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+option(MERIDIAN_SANITIZE "Enable address and undefined-behavior sanitizers" OFF)
+
+add_library(meridian src/engine.cpp src/journal.cpp)
+target_include_directories(meridian PUBLIC include)
+if(MSVC)
+  target_compile_options(meridian PUBLIC /W4 /WX /permissive- /utf-8)
+  if(MERIDIAN_SANITIZE)
+    message(FATAL_ERROR "MERIDIAN_SANITIZE requires GCC or Clang with address/undefined sanitizers")
+  endif()
+else()
+  target_compile_options(meridian PUBLIC -Wall -Wextra -Wpedantic -Werror)
+  if(MERIDIAN_SANITIZE)
+    target_compile_options(meridian PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(meridian PUBLIC -fsanitize=address,undefined)
+  endif()
+endif()
+
+add_executable(exchange src/main.cpp)
+target_link_libraries(exchange PRIVATE meridian)
+add_executable(exchange_tests tests/tests.cpp)
+target_link_libraries(exchange_tests PRIVATE meridian)
+add_executable(exchange_bench bench/bench.cpp)
+target_link_libraries(exchange_bench PRIVATE meridian)
+
+enable_testing()
+add_test(NAME correctness COMMAND exchange_tests)
+add_test(NAME benchmark_smoke COMMAND exchange_bench 1000 1)
+add_test(NAME cli_roundtrip COMMAND ${CMAKE_COMMAND}
+  -DEXCHANGE=$<TARGET_FILE:exchange> -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/cli-test
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cli.cmake)

@@ -1,0 +1,24 @@
+# Core only; single writer; no parser, network, journal or durable acknowledgement.
+# Synthetic workloads, <=32 resting orders. Latency is a separate instrumented pass.
+# Every raw throughput repetition is emitted below; no guaranteed latency target.
+# compiler=MSVC 1944
+# assertions=NDEBUG (use a Release build for performance)
+workload,commands,repetitions,median_ns_per_command,median_commands_per_second,instrumented_p50_ns,instrumented_p99_ns,instrumented_p999_ns,executions,state_hash
+# raw,rest_cancel,1,74.57
+# raw,rest_cancel,2,72.34
+# raw,rest_cancel,3,69.19
+# raw,rest_cancel,4,67.52
+# raw,rest_cancel,5,68.86
+rest_cancel,2000000,5,69.19,14452548.31,100.00,200.00,300.00,0,10646247488059516679
+# raw,cross,1,58.82
+# raw,cross,2,62.56
+# raw,cross,3,59.21
+# raw,cross,4,57.19
+# raw,cross,5,59.40
+cross,2000000,5,59.21,16889024.75,100.00,200.00,200.00,1000000,10646247488059516679
+# raw,sweep,1,84.41
+# raw,sweep,2,83.75
+# raw,sweep,3,84.36
+# raw,sweep,4,83.26
+# raw,sweep,5,83.63
+sweep,2000000,5,83.75,11940077.53,100.00,1000.00,1600.00,1939392,4921456774472069732
