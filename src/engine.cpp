@@ -28,6 +28,7 @@ Engine::Engine(std::size_t capacity) : nodes_(capacity) {
 
 void Engine::erase(Levels& levels, Levels::iterator level, std::size_t slot) {
     Node& node = nodes_[slot];
+    level->second.remove(node.order.quantity);
     if (node.previous == none) level->second.head = node.next;
     else nodes_[node.previous].next = node.next;
     if (node.next == none) level->second.tail = node.previous;
@@ -50,6 +51,7 @@ void Engine::rest(const Command& command, Quantity quantity) {
     else nodes_[node.previous].next = slot;
     level->second.tail = slot;
     orders_.emplace(command.id, slot);
+    level->second.add(quantity);
 }
 
 void Engine::apply(const Command& command, Result& result) {
@@ -91,6 +93,7 @@ void Engine::apply(const Command& command, Result& result) {
         result.trades.push_back({maker.id, command.id, maker.price, traded});
         remaining -= traded;
         maker.quantity -= traded;
+        level->second.remove(traded);
         if (maker.quantity == 0) erase(opposite, level, slot);
     }
     if (remaining != 0) rest(command, remaining);
@@ -106,15 +109,9 @@ std::optional<Order> Engine::find(OrderId id) const {
 
 Quote Engine::quote() const {
     Quote out;
-    const auto total = [&](const Level& level) {
-        Quantity quantity = 0;
-        for (auto slot = level.head; slot != none; slot = nodes_[slot].next) {
-            const auto amount = nodes_[slot].order.quantity;
-            if (amount > std::numeric_limits<Quantity>::max() - quantity)
-                throw std::overflow_error("aggregate quote quantity overflow");
-            quantity += amount;
-        }
-        return quantity;
+    const auto total = [](const Level& level) {
+        if (level.quantity_high != 0) throw std::overflow_error("aggregate quote quantity overflow");
+        return level.quantity;
     };
     if (!bids_.empty()) { out.bid = bids_.rbegin()->first; out.bid_quantity = total(bids_.rbegin()->second); }
     if (!asks_.empty()) { out.ask = asks_.begin()->first; out.ask_quantity = total(asks_.begin()->second); }
@@ -184,6 +181,7 @@ void Engine::verify() const {
         for (const auto& [price, level] : levels) {
             require(level.head != none && level.tail != none);
             auto previous = none;
+            Quantity total = 0, high = 0;
             for (auto slot = level.head; slot != none; slot = nodes_[slot].next) {
                 require(slot < nodes_.size() && seen.insert(slot).second);
                 const auto& node = nodes_[slot];
@@ -191,9 +189,13 @@ void Engine::verify() const {
                 require(node.order.side == side && node.order.price == price && node.order.quantity > 0);
                 const auto found = orders_.find(node.order.id);
                 require(found != orders_.end() && found->second == slot);
+                const auto amount = node.order.quantity;
+                if (amount > std::numeric_limits<Quantity>::max() - total) ++high;
+                total += amount;
                 previous = slot;
             }
             require(previous == level.tail);
+            require(total == level.quantity && high == level.quantity_high);
         }
     };
     inspect(bids_, Side::Buy);

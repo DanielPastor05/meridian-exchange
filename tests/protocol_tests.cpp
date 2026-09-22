@@ -28,8 +28,10 @@ int main() {
   std::mt19937_64 random(0xF022);std::size_t accepted=0,rejected=0;
   for(int i=0;i<100000;++i) {
    auto input=out.bytes;input[static_cast<std::size_t>(random()%input.size())]^=static_cast<unsigned char>(random());
-   try { const auto r=wire::decode_request(input,7);check(r.account==7);++accepted; }
+   std::optional<Request> decoded;
+   try { decoded=wire::decode_request(input,7); }
    catch(const std::runtime_error&) { ++rejected; }
+   if(decoded) { check(decoded->account==7); ++accepted; }
   }
   check(accepted>0 && rejected>0);
   std::cout<<"PASS protocol boundaries and 100000 structured parser mutations\n";

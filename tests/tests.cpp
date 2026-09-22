@@ -1,5 +1,7 @@
 #include "meridian/engine.hpp"
 #include "meridian/journal.hpp"
+#include "meridian/text.hpp"
+#include <sstream>
 
 #include <algorithm>
 #include <chrono>
@@ -73,6 +75,18 @@ public:
         }
         if (remaining > 0) orders_.push_back({c.id, c.side, c.price, remaining});
         out.remaining = remaining;
+        return out;
+    }
+    Quote quote() const {
+        Quote out;
+        for (const auto& order : orders_) {
+            auto& price = order.side == Side::Buy ? out.bid : out.ask;
+            auto& total = order.side == Side::Buy ? out.bid_quantity : out.ask_quantity;
+            if (price == 0 || (order.side == Side::Buy ? order.price > price : order.price < price)) {
+                price = order.price;
+                total = order.quantity;
+            } else if (price == order.price) total += order.quantity;
+        }
         return out;
     }
     std::vector<Order> snapshot() const {
@@ -150,6 +164,30 @@ void validation_and_capacity() {
           "crossing on a full book must reuse the consumed maker slot");
 }
 
+void aggregate_boundaries() {
+    Engine engine(4);
+    constexpr auto maximum = std::numeric_limits<Quantity>::max();
+    apply(engine, add(1, Side::Buy, 100, maximum));
+    apply(engine, add(2, Side::Buy, 100, 2));
+    throws([&] { (void)engine.quote(); }, "overflowed quote must not wrap");
+    apply(engine, add(3, Side::Sell, 100, 3));
+    check(engine.quote().bid_quantity == maximum - 1, "partial fill did not reduce wide aggregate");
+    apply(engine, Command::cancel(1));
+    check(engine.quote().bid_quantity == 2, "cancel did not release level aggregate");
+    apply(engine, Command::cancel(2));
+    check(engine.quote() == Quote{}, "empty level retained aggregate");
+}
+
+void bounded_input() {
+    std::istringstream input(std::string(100000, 'x') + "\nBOOK\n" + std::string(4096, 'a'));
+    std::string line;
+    bool exceeded = false;
+    check(read_bounded_line(input, line, exceeded) && exceeded && line.size() == 4096, "oversized input grew the buffer");
+    check(read_bounded_line(input, line, exceeded) && !exceeded && line == "BOOK", "oversized line swallowed next command");
+    check(read_bounded_line(input, line, exceeded) && !exceeded && line.size() == 4096, "exact bound at EOF rejected");
+    check(!read_bounded_line(input, line, exceeded), "EOF generated another line");
+}
+
 void integer_boundaries() {
     Engine engine(4);
     constexpr auto max_quantity = std::numeric_limits<Quantity>::max();
@@ -190,6 +228,7 @@ void differential() {
             const std::string context = "seed=" + std::to_string(seed) + " step=" + std::to_string(step);
             check(actual == expected, "result differs: " + context);
             check(engine.snapshot() == reference.snapshot(), "book differs: " + context);
+            check(engine.quote() == reference.quote(), "aggregated quote differs: " + context);
             if (actual.status == Status::Accepted) {
                 Quantity total = actual.remaining;
                 for (const auto& trade : actual.trades) total += trade.quantity;
@@ -257,6 +296,20 @@ void journal_roundtrip() {
     check(scan_journal(path).records == 201, "append after reopen lost a record");
 }
 
+void replay_exception() {
+    TestDirectory directory;
+    const auto file = directory.path / "replay-exception.journal";
+    Journal journal(file, 8, Durability::Sync);
+    journal.append(add(1, Side::Buy, 99, 2));
+    journal.append(add(2, Side::Sell, 101, 3));
+    const auto original = bytes(file);
+    throws([&] { (void)journal.replay([](auto, const auto&) { throw std::runtime_error("callback failed"); }); },
+           "replay swallowed callback failure");
+    throws([&] { journal.append(Command::cancel(1)); }, "failed replay allowed append");
+    throws([&] { (void)journal.replay({}); }, "failed replay allowed reuse");
+    check(bytes(file) == original, "failed replay modified journal");
+}
+
 void torn_tail_and_corruption() {
     TestDirectory directory;
     const auto path = directory.path / "source.journal";
@@ -305,6 +358,9 @@ int main() {
         {"cancellation, partial fills and slot reuse", cancellation_and_slot_reuse},
         {"validation, duplicate IDs and atomic capacity rejection", validation_and_capacity},
         {"integer boundaries", integer_boundaries},
+        {"bounded input consumes oversized lines without retaining them", bounded_input},
+        {"cached aggregate overflow and recovery", aggregate_boundaries},
+        {"failed replay forbids further writes", replay_exception},
         {"80,000 differential commands, 20 reproducible seeds", differential},
         {"journal replay, durability modes and writer exclusion", journal_roundtrip},
         {"every partial tail and every corrupted byte", torn_tail_and_corruption}

@@ -42,7 +42,10 @@ private:
 };
 struct Listener { Socket socket; std::uint16_t port; };
 Listener listen(std::string_view address, std::uint16_t port, int backlog);
-Socket accept(Handle listener);
+enum class AcceptError { Retry, ResourcePressure, Fatal };
+[[nodiscard]] AcceptError classify_accept_error(int error);
+struct AcceptResult { Socket socket; AcceptError error{AcceptError::Retry}; int system_error{}; };
+AcceptResult accept(Handle listener);
 bool readable(Handle socket, int milliseconds);
 bool receive(Handle socket, wire::Frame& frame, int timeout_ms, const std::atomic<bool>& stopping);
 void send(Handle socket, const wire::Frame& frame, int timeout_ms, const std::atomic<bool>& stopping);

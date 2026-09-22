@@ -111,14 +111,41 @@ Listener listen(std::string_view address, std::uint16_t port, int backlog) {
     nonblocking(socket.get());
     return {std::move(socket),ntohs(endpoint.sin_port)};
 }
-Socket accept(Handle listener) {
+AcceptError classify_accept_error(int error) {
+#ifdef _WIN32
+    switch (error) {
+    case WSAEWOULDBLOCK: case WSAEINTR: case WSAECONNABORTED: case WSAECONNRESET:
+    case WSAENETDOWN: case WSAENETUNREACH: case WSAEHOSTUNREACH: return AcceptError::Retry;
+    case WSAEMFILE: case WSAENOBUFS: return AcceptError::ResourcePressure;
+    default: return AcceptError::Fatal;
+    }
+#else
+    if (error == EAGAIN || error == EWOULDBLOCK || error == EINTR || error == ECONNABORTED ||
+        error == ENETDOWN || error == EPROTO || error == ENOPROTOOPT || error == EHOSTDOWN ||
+        error == ENONET || error == EHOSTUNREACH || error == EOPNOTSUPP || error == ENETUNREACH)
+        return AcceptError::Retry;
+    if (error == EMFILE || error == ENFILE || error == ENOBUFS || error == ENOMEM)
+        return AcceptError::ResourcePressure;
+    return AcceptError::Fatal;
+#endif
+}
+AcceptResult accept(Handle listener) {
     Socket socket(::accept(listener,nullptr,nullptr));
-    if (socket.get() == invalid) { if (pending()) return socket; throw std::runtime_error("accept failed"); }
+    if (socket.get() == invalid) {
+#ifdef _WIN32
+        const auto error = WSAGetLastError();
+#else
+        const auto error = errno;
+#endif
+        const auto category = classify_accept_error(error);
+        if (category == AcceptError::Fatal) throw std::runtime_error("accept failed: " + std::to_string(error));
+        return {std::move(socket), category, error};
+    }
     nonblocking(socket.get());
     int enabled = 1;
     if (setsockopt(socket.get(),IPPROTO_TCP,TCP_NODELAY,reinterpret_cast<const char*>(&enabled),sizeof(enabled)) != 0)
         throw std::runtime_error("cannot disable Nagle");
-    return socket;
+    return {std::move(socket), AcceptError::Retry, 0};
 }
 bool readable(Handle socket, int milliseconds) { return wait(socket,true,milliseconds); }
 bool receive(Handle socket, wire::Frame& frame, int timeout_ms, const std::atomic<bool>& stopping) {

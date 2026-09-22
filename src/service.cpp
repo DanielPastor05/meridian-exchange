@@ -1,4 +1,5 @@
 #include "meridian/service.hpp"
+#include "meridian/text.hpp"
 #include <algorithm>
 #include <charconv>
 #include <fstream>
@@ -48,7 +49,10 @@ std::vector<AccountConfig> read_accounts(const std::filesystem::path& path) {
     std::ifstream file(path);
     if (!file) throw std::runtime_error("cannot open account configuration");
     std::vector<AccountConfig> out;
-    for (std::string line; std::getline(file, line);) {
+    std::string line;
+    bool exceeded = false;
+    while (read_bounded_line(file, line, exceeded)) {
+        if (exceeded) throw std::runtime_error("account line exceeds 4096 bytes");
         std::istringstream input(line.substr(0, line.find('#')));
         std::vector<std::string> words;
         for (std::string word; input >> word;) words.push_back(word);
@@ -75,8 +79,8 @@ std::uint64_t configuration_hash(const std::vector<AccountConfig>& accounts) {
 }
 
 ExchangeState::ExchangeState(std::size_t capacity, const std::vector<AccountConfig>& configs,
-                             std::size_t event_capacity)
-    : engine_(capacity), event_capacity_(event_capacity) {
+                             std::size_t event_capacity, FaultHook fault)
+    : engine_(capacity), fault_(std::move(fault)), event_capacity_(event_capacity) {
     if (configs.empty() || configs.size() > 128 || event_capacity == 0) throw std::invalid_argument("invalid account or event capacity");
     std::uint64_t positions = 0;
     for (const auto& config : configs) {
@@ -186,12 +190,16 @@ Outcome ExchangeState::apply(const Request& request, std::uint64_t global_sequen
     sequence_ = global_sequence;
     auto& account = accounts_.at(request.account);
     const auto& command = request.command;
-    Outcome outcome = reject(request, Code::Invalid);
+    Outcome outcome;
+    outcome.global_sequence = sequence_;
+    outcome.request_sequence = request.sequence;
+    outcome.code = Code::Invalid;
     if (command.kind == Kind::New) {
         outcome.code = validate_new(request);
         if (outcome.code == Code::Accepted) {
             Result result;
             engine_.apply(command, result);
+            if (fault_) fault_("after_match");
             outcome.code = engine_code(result.status);
             outcome.remaining = result.remaining;
             outcome.executions = result.trades.size();
@@ -210,6 +218,7 @@ Outcome ExchangeState::apply(const Request& request, std::uint64_t global_sequen
                 if (maker.order.quantity == 0) { maker_account.orders.erase(trade.maker); orders_.erase(trade.maker); }
                 outcome.filled += trade.quantity;
                 emit({0, 0, 1, trade, {}});
+                if (fault_) fault_("during_settlement");
             }
             if (result.status == Status::Accepted && result.remaining > 0) {
                 const Order order{command.id, command.side, command.price, result.remaining};
@@ -234,10 +243,12 @@ Outcome ExchangeState::apply(const Request& request, std::uint64_t global_sequen
             while (!account.orders.empty()) { cancel(*account.orders.begin()); ++outcome.cancelled; }
         }
     }
-    emit({0, 0, 2, {}, engine_.quote()});
+    const auto final_quote = engine_.quote();
+    emit({0, 0, 2, {}, final_quote});
     outcome.balance = account.balance;
-    outcome.quote = engine_.quote();
+    outcome.quote = final_quote;
     outcome.event_sequence = event_sequence_;
+    if (fault_) fault_("before_result_cache");
     account.last = request.sequence;
     account.request = request;
     account.outcome = outcome;
@@ -251,24 +262,49 @@ Feed ExchangeState::feed(std::uint64_t after, std::size_t limit) const {
         out.gap = true;
         return out; // quote + latest are an atomic top-of-book recovery snapshot.
     }
-    for (const auto& event : events_) if (event.sequence > after) {
-        out.events.push_back(event);
-        if (out.events.size() == limit) break;
+    if (!events_.empty() && after < event_sequence_) {
+        const auto offset = after < events_.front().sequence ? 0 :
+            static_cast<std::size_t>(after - events_.front().sequence + 1);
+        const auto count = std::min(limit, events_.size() - offset);
+        out.events.reserve(count);
+        for (std::size_t i = 0; i < count; ++i) out.events.push_back(events_[offset + i]);
     }
     return out;
 }
 
 std::uint64_t ExchangeState::state_hash() const {
     auto hash = engine_.state_hash();
-    const auto mix = [&](auto value) { for (int i = 0; i < 8; ++i) { hash ^= value & 255; hash *= 1099511628211ULL; value >>= 8; } };
-    mix(sequence_);
-    mix(event_sequence_);
+    const auto mix = [&](std::uint64_t value) {
+        for (int i = 0; i < 8; ++i) { hash ^= value & 255; hash *= 1099511628211ULL; value >>= 8; }
+    };
+    const auto balance = [&](const Balance& b) {
+        for (auto v : {b.cash, b.inventory, b.reserved_cash, b.reserved_inventory, b.buy_quantity, b.open_notional,
+                       static_cast<std::uint64_t>(b.halted)}) mix(v);
+    };
+    const auto quote = [&](const Quote& q) { mix(q.bid); mix(q.ask); mix(q.bid_quantity); mix(q.ask_quantity); };
+    mix(sequence_); mix(event_sequence_); mix(event_capacity_); mix(total_cash_); mix(total_inventory_);
+    mix(accounts_.size());
     for (const auto& [id, account] : accounts_) {
-        const auto& b = account.balance;
-        for (auto value : {id, account.last, b.cash, b.inventory, b.reserved_cash, b.reserved_inventory,
-                           b.buy_quantity, b.open_notional, static_cast<std::uint64_t>(b.halted)}) mix(value);
+        mix(id); mix(account.last); balance(account.balance);
+        const auto& config = account.config;
+        for (auto v : {config.cash, config.inventory, config.max_order_quantity, config.max_open_notional, config.max_position}) mix(v);
+        const auto& request = account.request;
+        mix(request.account); mix(request.sequence); mix(static_cast<std::uint64_t>(request.command.kind));
+        mix(request.command.id); mix(static_cast<std::uint64_t>(request.command.side)); mix(request.command.price); mix(request.command.quantity);
+        const auto& outcome = account.outcome;
+        for (auto v : {outcome.global_sequence, outcome.request_sequence, static_cast<std::uint64_t>(outcome.code),
+                       outcome.remaining, outcome.filled, outcome.executions, outcome.cancelled, outcome.event_sequence}) mix(v);
+        balance(outcome.balance); quote(outcome.quote);
+        mix(account.orders.size());
+        for (auto order : account.orders) mix(order);
     }
-    return hash;
+    for (const auto& order : engine_.snapshot()) { mix(order.id); mix(orders_.at(order.id).owner); }
+    mix(events_.size());
+    for (const auto& event : events_) {
+        mix(event.sequence); mix(event.global_sequence); mix(event.type);
+        mix(event.trade.maker); mix(event.trade.taker); mix(event.trade.price); mix(event.trade.quantity); quote(event.quote);
+    }
+    return hash; // Diagnostic only: collisions remain possible; tests also compare explicit state.
 }
 
 void ExchangeState::verify() const {
@@ -302,8 +338,10 @@ void ExchangeState::verify() const {
 }
 
 DurableExchange::DurableExchange(const std::filesystem::path& path, std::size_t capacity,
-                                 const std::vector<AccountConfig>& accounts, Durability durability, FaultHook fault)
-    : state_(capacity, accounts), journal_(path, capacity, durability, configuration_hash(accounts), fault), fault_(std::move(fault)) {
+                                 const std::vector<AccountConfig>& accounts, Durability durability, FaultHook fault,
+                                 std::shared_ptr<JournalIO> io)
+    : state_(capacity, accounts, 8192, fault),
+      journal_(path, capacity, durability, configuration_hash(accounts), fault, std::move(io)), fault_(std::move(fault)) {
     (void)journal_.replay_requests([&](auto sequence, const Request& request) { state_.apply(request, sequence); });
     state_.verify();
 }

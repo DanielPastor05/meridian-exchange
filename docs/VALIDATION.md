@@ -1,5 +1,11 @@
 # Verification record
 
+## Audit remediation working tree
+
+Windows/MSVC Release: all 13 current CTest groups passed after the initial audit fixes, including strict Node response validation, immutable snapshot retention/copy bounds, same-account concurrency/reconnect, and injected short-write/ENOSPC/flush/sync/allocation failures. The executable demo also passed. A four-scenario one-second load smoke (buffered/sync, 1k/100k burst) produced zero transport failures and zero business rejections among submitted requests; this is a correctness check, not an SLO or replacement for longer benchmarks. Cross-platform verification and the larger operational changes remain pending in AUDIT-FOLLOWUP.md.
+
+The sections below record the original v1.0.0 release.
+
 ## Local Windows execution
 
 2026-09-22: Windows 11 build 10.0.26200, AMD Ryzen 5 5500, 12 logical processors, MSVC 19.44 / Visual Studio 2022 Build Tools, CMake 3.31.6, Node 24.13.0. Release compilation uses /W4 /WX and /O2. The seven CTest entries pass locally.

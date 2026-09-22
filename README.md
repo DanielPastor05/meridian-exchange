@@ -8,7 +8,7 @@ One instrument, price/time FIFO, partial fills and cancellation. A bounded binar
 
 ## Run the demonstration
 
-Requires CMake 3.20+, a C++20 compiler and Node.js 24 for client/testing tools. C++ executables use only the standard library and OS APIs. There are no npm packages.
+Requires CMake 3.20+, a C++20 compiler and Node.js 24 for client/testing tools. C++ executables use only the standard library and OS APIs. There are no npm packages. To build only the C++ programs without Node, configure with `-DBUILD_TESTING=OFF`. Benchmark tools can be omitted with `-DMERIDIAN_BUILD_BENCHMARKS=OFF`.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -24,7 +24,7 @@ The demo starts its own server, crosses orders from two independent clients, ver
 
 ## Prebuilt packages
 
-Versioned Windows/Linux binaries and a source archive are available on the [Releases page](https://github.com/DanielPastor05/meridian-exchange/releases). Extract the entire package, keep tools/ and tests/network_helpers.mjs, then run:
+Versioned Windows/Linux binaries and a source archive are available on the [Releases page](https://github.com/DanielPastor05/meridian-exchange/releases). Extract the entire package and keep tools/ together, then run:
 
 ```sh
 node tools/demo.mjs ./bin/exchange_server.exe  # Windows x64
@@ -66,7 +66,7 @@ The core profiler uses 1k, 10k and 100k resting orders, separate cancellation/in
 node tools/load.mjs ./build/exchange_server bench/results/my-run
 ```
 
-See [performance](docs/PERFORMANCE.md), [raw measurements](bench/results/windows-2026-09-22), [verification](docs/VALIDATION.md), [wire protocol](docs/PROTOCOL.md) and [design/failure contract](docs/DESIGN.md). The tiny-book `exchange_bench` remains a historical microbenchmark, not an end-to-end latency claim.
+The tracked performance report describes v1.0.0; audit remediation and new measurements are tracked in [the remediation ledger](docs/AUDIT-FOLLOWUP.md). See [performance](docs/PERFORMANCE.md), [raw measurements](bench/results/windows-2026-09-22), [verification](docs/VALIDATION.md), [wire protocol](docs/PROTOCOL.md) and [design/failure contract](docs/DESIGN.md). The tiny-book `exchange_bench` remains a historical microbenchmark, not an end-to-end latency claim.
 
 ## Scope
 
@@ -74,4 +74,4 @@ Sync mode appends and calls `fsync` / `_commit` before applying each new request
 
 The implementation is an engineering simulator, not a deployed financial venue. It has one serialized book, GTC limit orders, funded long-only accounts and a bounded polling feed. It does not provide multi-symbol routing, market/IOC orders, replacement, replicated consensus, cross-account settlement or exchange connectivity. [Scope decisions](docs/ROADMAP.md) explain when batching, checkpointing and different data structures would be justified.
 
-Generated with Codex assistance. The useful portfolio evidence is reproducible behavior, honest measurements, and the author's ability to explain and change the design. [Spanish starting guide](EMPIEZA-AQUI.md).
+Generated with Codex assistance. The useful portfolio evidence is reproducible behavior, honest measurements, and the author's ability to explain and change the design. [Spanish starting guide](EMPIEZA-AQUI.md). Licensed under the [MIT License](LICENSE).

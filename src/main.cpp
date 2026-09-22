@@ -1,5 +1,7 @@
 #include "meridian/engine.hpp"
 #include "meridian/journal.hpp"
+#include "meridian/text.hpp"
+#include "meridian/version.hpp"
 
 #include <charconv>
 #include <fstream>
@@ -56,7 +58,7 @@ void print_book(const Engine& engine) {
 }
 
 void usage() {
-    std::cout << "Meridian Exchange 0.1.0\n"
+    std::cout << "Meridian Exchange " MERIDIAN_VERSION "\n"
               << "  exchange run --journal PATH [--input FILE] [--capacity N] [--durability sync|buffered]\n"
               << "  exchange replay JOURNAL\n"
               << "Commands: NEW id BUY|SELL price_ticks quantity; CANCEL id; BOOK (one per line).\n"
@@ -116,8 +118,14 @@ int main(int argc, char** argv) {
         std::istream& stream = input_path.empty() ? std::cin : input;
         std::string line;
         std::size_t line_number = 0, errors = 0;
-        while (std::getline(stream, line)) {
+        bool exceeded = false;
+        while (read_bounded_line(stream, line, exceeded)) {
             ++line_number;
+            if (exceeded) {
+                ++errors;
+                std::cerr << "line " << line_number << ": command exceeds 4096 bytes\n";
+                continue;
+            }
             std::vector<std::string> words;
             std::istringstream tokens(line.substr(0, line.find('#')));
             for (std::string word; tokens >> word;) words.push_back(word);
@@ -125,7 +133,6 @@ int main(int argc, char** argv) {
             if (words.size() == 1 && words[0] == "BOOK") { print_book(engine); continue; }
             Command command;
             try {
-                if (line.size() > 4096) throw std::invalid_argument("command exceeds 4096 bytes");
                 command = parse(words);
             } catch (const std::invalid_argument& error) {
                 ++errors;

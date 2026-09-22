@@ -1,4 +1,6 @@
-# Performance report — 22 September 2026
+# Historical v1.0.0 performance report — 22 September 2026
+
+These measurements precede the audit remediation. They remain evidence for that release, not claims about the modified working tree. The updated load tool defaults to three ten-second repetitions, reports business outcomes, and preserves per-account insertion/cancellation pairs after admission shedding. New full-system performance evidence is pending in AUDIT-FOLLOWUP.md.
 
 Measurements below are observations on one unpinned Windows desktop, not guaranteed exchange latency. Raw data and environment metadata are in [windows-2026-09-22](../bench/results/windows-2026-09-22). The benchmark tools emit their own inputs, timings and checksums; replay verifies the number of completed submissions.
 

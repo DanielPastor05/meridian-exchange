@@ -56,13 +56,15 @@ struct Feed {
 class ExchangeState {
 public:
     ExchangeState(std::size_t capacity, const std::vector<AccountConfig>& accounts,
-                  std::size_t event_capacity = 8192);
+                  std::size_t event_capacity = 8192, FaultHook fault = {});
     [[nodiscard]] bool authenticate(AccountId account, std::string_view token) const;
     [[nodiscard]] std::optional<Outcome> retry(const Request& request) const;
     Outcome apply(const Request& request, std::uint64_t global_sequence);
     [[nodiscard]] Balance balance(AccountId account) const;
     [[nodiscard]] std::uint64_t last_request(AccountId account) const;
     [[nodiscard]] std::uint64_t sequence() const { return sequence_; }
+    [[nodiscard]] std::uint64_t event_sequence() const { return event_sequence_; }
+    [[nodiscard]] std::size_t order_count() const { return engine_.size(); }
     [[nodiscard]] Feed feed(std::uint64_t after, std::size_t limit) const;
     [[nodiscard]] Quote quote() const { return engine_.quote(); }
     [[nodiscard]] std::vector<Order> snapshot() const { return engine_.snapshot(); }
@@ -79,6 +81,7 @@ private:
     };
     struct OwnedOrder { AccountId owner; Order order; };
     Engine engine_;
+    FaultHook fault_;
     std::map<AccountId, Account> accounts_;
     std::unordered_map<OrderId, OwnedOrder> orders_;
     std::deque<Event> events_;
@@ -95,7 +98,7 @@ class DurableExchange {
 public:
     DurableExchange(const std::filesystem::path& path, std::size_t capacity,
                     const std::vector<AccountConfig>& accounts, Durability durability,
-                    FaultHook fault = {});
+                    FaultHook fault = {}, std::shared_ptr<JournalIO> io = {});
     Outcome execute(const Request& request);
     [[nodiscard]] const ExchangeState& state() const { return state_; }
 private:

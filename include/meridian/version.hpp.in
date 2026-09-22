@@ -1,0 +1,2 @@
+#pragma once
+#define MERIDIAN_VERSION "@PROJECT_VERSION@"

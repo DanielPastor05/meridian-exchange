@@ -1,4 +1,5 @@
 #include "meridian/net.hpp"
+#include "meridian/snapshot.hpp"
 #include <charconv>
 #include <csignal>
 #include <iostream>
@@ -8,8 +9,9 @@
 
 using namespace meridian;
 namespace {
-volatile std::sig_atomic_t interrupted = 0;
-void interrupt(int) { interrupted = 1; }
+static_assert(std::atomic<bool>::is_always_lock_free, "signal flag must be lock-free");
+std::atomic<bool> interrupted{false};
+void interrupt(int) { interrupted.store(true, std::memory_order_relaxed); }
 std::uint64_t number(std::string_view text) {
     std::uint64_t value{};
     const auto [end,error] = std::from_chars(text.data(),text.data()+text.size(),value);
@@ -71,6 +73,7 @@ int main(int argc, char** argv) {
         net::Runtime runtime;
         auto listener=net::listen(host,static_cast<std::uint16_t>(port),static_cast<int>(clients));
         std::mutex mutex;
+        BookSnapshots snapshots;
         Counters counters;
         std::signal(SIGINT,interrupt); std::signal(SIGTERM,interrupt);
         std::cout << "{\"type\":\"ready\",\"port\":" << listener.port << ",\"sequence\":"
@@ -123,19 +126,10 @@ int main(int argc, char** argv) {
                             const auto offset=reader.u64(), version=reader.u64(), limit=reader.u64(); reader.finish();
                             if (limit==0 || limit>256) throw std::runtime_error("invalid book limit");
                             wire::Writer out;
-                            const auto current=exchange.state().sequence();
-                            const bool changed=(offset!=0 || version!=0) && version!=current;
-                            out.u64(changed); out.u64(current);
-                            if (changed) { out.u64(0);out.u64(offset);out.u64(0); }
-                            else {
-                                const auto book=exchange.state().snapshot();
-                                const auto start=std::min(offset,static_cast<std::uint64_t>(book.size()));
-                                const auto count=std::min(limit,static_cast<std::uint64_t>(book.size())-start);
-                                out.u64(book.size());out.u64(start);out.u64(count);
-                                for (auto j=start;j<start+count;++j) {
-                                    const auto& o=book[static_cast<std::size_t>(j)];
-                                    out.u64(o.id);out.u64(static_cast<std::uint64_t>(o.side));out.u64(static_cast<std::uint64_t>(o.price));out.u64(o.quantity);
-                                }
+                            const auto page=snapshots.page(exchange.state(),offset,version,static_cast<std::size_t>(limit));
+                            out.u64(page.changed); out.u64(page.version); out.u64(page.total); out.u64(page.offset); out.u64(page.orders.size());
+                            for (const auto& o:page.orders) {
+                                out.u64(o.id);out.u64(static_cast<std::uint64_t>(o.side));out.u64(static_cast<std::uint64_t>(o.price));out.u64(o.quantity);
                             }
                             output={static_cast<std::uint16_t>(wire::Book|0x8000),std::move(out.bytes)};
                         } else if (input.type==wire::Ping) { reader.finish(); output={static_cast<std::uint16_t>(wire::Ping|0x8000),{}}; }
@@ -162,8 +156,15 @@ int main(int argc, char** argv) {
                 if (it->done->load()) { it->thread.join(); it=workers.erase(it); } else ++it;
             }
             if (!net::readable(listener.socket.get(),50)) continue;
-            auto socket=net::accept(listener.socket.get());
-            if (socket.get()==net::invalid) continue;
+            auto accepted=net::accept(listener.socket.get());
+            if (accepted.socket.get()==net::invalid) {
+                if (accepted.error==net::AcceptError::ResourcePressure) {
+                    std::cerr << "accept resource pressure: " << accepted.system_error << '\n';
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                }
+                continue;
+            }
+            auto socket=std::move(accepted.socket);
             ++counters.connections;
             if (workers.size()>=clients) { ++counters.rejected_connections; continue; }
             auto done=std::make_shared<std::atomic<bool>>(false);
