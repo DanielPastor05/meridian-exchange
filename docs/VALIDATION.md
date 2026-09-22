@@ -20,6 +20,10 @@ The demo is executable assertions, not a pre-recorded screenshot. No performance
 
 The workflow runs the same suite on Linux/GCC and Windows/MSVC, the complete suite on Linux/Clang ASan/UBSan, then a seeded 30-second libFuzzer run. The first completely successful hosted run is [35776351168](https://github.com/DanielPastor05/meridian-exchange/actions/runs/35776351168), revision 0e906ef. All three jobs passed, including the seven-test suites and the 30-second fuzz run. Initial failures found GCC file-deleter attribute handling, CMake regex portability and a keepalive gap in a slow-consumer test; fixes were verified by that fresh run. Later release packaging revisions are checked by the same workflow. The final release page identifies its source commit and verification run.
 
+## Packaged demonstration
+
+Two initial Windows packaging checks using piped PowerShell output hit the client's 5-second response deadline; the exact stall source was not isolated. Three directly captured reruns completed in 249–261 ms. The user-facing demo now explicitly permits 30 seconds for socket operations; default server/client settings, the network deadline tests and recorded benchmarks are unchanged. Package acceptance requires a fresh execution of the final archive.
+
 ## Limits
 
 External process kills are not disk power-loss tests. CRC detects the exercised corruptions, not malicious changes or an entire lost suffix. Network tests use loopback, not a physical NIC. Authentication/TLS hardening, production traffic realism and availability across machine loss are outside the verified scope. The single desktop benchmark does not establish latency guarantees; timing resolution produces zero-nanosecond samples in the instrumented core pass.

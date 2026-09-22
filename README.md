@@ -20,7 +20,7 @@ node tools/demo.mjs ./build/exchange_server
 node tools/demo.mjs ./build/Release/exchange_server.exe
 ```
 
-The demo starts its own server, crosses orders from two independent clients, verifies the balances, forcibly restarts the server, retries without executing twice, and activates the account kill switch. Temporary files are removed afterwards.
+The demo starts its own server, crosses orders from two independent clients, verifies the balances, forcibly restarts the server, retries without executing twice, and activates the account kill switch. Temporary files are removed afterwards. The demonstration allows 30 seconds per socket operation for desktop/terminal stalls; normal gateway defaults and performance measurements retain their documented deadlines.
 
 ## Prebuilt packages
 
