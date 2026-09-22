@@ -36,9 +36,9 @@ export async function start(executable,dir,extra=[]){
   events.on('message',onMessage);events.on('exit',onExit);
   if(child.exitCode!==null||child.signalCode!==null)onExit();
  });
- const stop=async()=>{
-  if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');
-  let timer;try{await Promise.race([closed,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('server did not exit')),5000);})]);}finally{clearTimeout(timer);}
+ const stop=async(signal='SIGKILL')=>{
+  if(child.exitCode===null&&child.signalCode===null)child.kill(signal);
+  let timer;try{const result=await Promise.race([closed,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('server did not exit')),5000);})]);if(signal==='SIGTERM'&&result.code!==0)throw Error('graceful server exit failed: '+stderr);return result;}finally{clearTimeout(timer);}
  };
  try{const ready=await waitFor('ready');return{child,ready,port:ready.port,waitFor,stop,closed,get stderr(){return stderr;}};}
  catch(error){await stop();throw error;}

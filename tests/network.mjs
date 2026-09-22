@@ -57,11 +57,11 @@ try{
  let closeTimer;try{slow.resume();await Promise.race([slowClosed,new Promise((_,reject)=>{closeTimer=setTimeout(()=>reject(Error('slow reader was not evicted')),7000);})]);}
  finally{clearInterval(keepAlive);clearTimeout(closeTimer);}if(pingFailure)throw pingFailure;
  const metrics=values((await one.send(T.metrics)).payload);assert(metrics[3]>=1n);assert(metrics[4]>=1n);
- one.close();two.close();three.close();sockets.forEach(s=>s.destroy());await server.stop();
+ one.close();two.close();three.close();sockets.forEach(s=>s.destroy());await server.stop(process.platform==='win32'?'SIGKILL':'SIGTERM');
  server=await start(executable,dir,['--durability','sync']);one=await Client.connect(server.port);await one.login(2,'2'.repeat(32));
  const replay=await one.submit(4,2,32);assert.equal(replay.status,'cancelled');
  const state=values((await one.send(T.account)).payload);assert.equal(state[1],4n);
- one.close();await server.stop();
+ one.close();await server.stop(process.platform==='win32'?'SIGKILL':'SIGTERM');
  server=await start(executable,dir,['--max-clients','1','--timeout-ms','2000']);
  one=await Client.connect(server.port);await one.login(1,'1'.repeat(32));
  const excess=await Client.connect(server.port);await assert.rejects(excess.login(2,'2'.repeat(32)));excess.close();
@@ -72,4 +72,4 @@ try{
  await delay(100);one=await Client.connect(server.port);await one.login(1,'1'.repeat(32));await one.send(T.ping);
  console.log('PASS connection cap and incomplete-frame deadline');
  console.log('PASS TCP sessions, fragmentation, ownership, concurrency, retries, reconnect, malformed input, feed recovery and slow-reader isolation');
-}finally{one?.close();two?.close();three?.close();sockets.forEach(s=>s.destroy());await server?.stop();cleanup(dir);}
+}finally{one?.close();two?.close();three?.close();sockets.forEach(s=>s.destroy());await server?.stop(process.platform==='win32'?'SIGKILL':'SIGTERM');cleanup(dir);}

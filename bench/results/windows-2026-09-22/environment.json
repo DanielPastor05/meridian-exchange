@@ -6,5 +6,10 @@
   "logicalCpus": 12,
   "totalMemory": 17067794432,
   "node": "v24.13.0",
-  "notes": "Client and server share one unpinned host; no NIC, TLS, CPU isolation or power-loss simulation. Node scheduler lateness included. Three accounts, 64 in-flight requests per account; shed demand is reported, not a measured server saturation ceiling."
+  "notes": "Client and server share one unpinned host; no NIC, TLS, CPU isolation or power-loss simulation. Node scheduler lateness included. Three accounts, 64 in-flight requests per account; shed demand is reported, not a measured server saturation ceiling.",
+  "compiler": "MSVC 19.44.35228",
+  "cmake": "3.31.6-msvc6",
+  "build": "Visual Studio 17 2022 x64, Release /O2 NDEBUG",
+  "benchmarkSourceCommit": "18ee2e6d8e197ac4ea27cc4ea23d0a256f6724de",
+  "measurementHistory": "Recorded before the first feature commit; benchmark, load-generator and engine sources match this commit. Later changes fix file cleanup and test portability."
 }

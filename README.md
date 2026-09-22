@@ -22,6 +22,17 @@ node tools/demo.mjs ./build/Release/exchange_server.exe
 
 The demo starts its own server, crosses orders from two independent clients, verifies the balances, forcibly restarts the server, retries without executing twice, and activates the account kill switch. Temporary files are removed afterwards.
 
+## Prebuilt packages
+
+Versioned Windows/Linux binaries and a source archive are available on the [Releases page](https://github.com/DanielPastor05/meridian-exchange/releases). Extract the entire package, keep tools/ and tests/network_helpers.mjs, then run:
+
+```sh
+node tools/demo.mjs ./bin/exchange_server.exe  # Windows x64
+node tools/demo.mjs ./bin/exchange_server      # Linux x64
+```
+
+Node.js 24 is required for the demonstration. Windows binaries require the Microsoft Visual C++ x64 runtime. Linux binaries target the Ubuntu GitHub runner's libc; build from source if your distribution is incompatible. BUILD-INFO identifies the source revision; SHA256SUMS verifies downloaded assets.
+
 ## Interactive session
 
 ```sh
