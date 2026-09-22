@@ -53,6 +53,9 @@ configure_file(include/meridian/version.hpp.in generated/meridian/version.hpp @O
 target_include_directories(exchange PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 if(MERIDIAN_BUILD_BENCHMARKS)
+  add_executable(exchange_service_profile bench/service_profile.cpp)
+  target_link_libraries(exchange_service_profile PRIVATE meridian)
+  meridian_warnings(exchange_service_profile)
   add_executable(exchange_bench bench/bench.cpp)
   target_link_libraries(exchange_bench PRIVATE meridian)
   meridian_warnings(exchange_bench)
@@ -80,8 +83,9 @@ if(BUILD_TESTING)
   add_test(NAME client_validation COMMAND "${NODE_EXECUTABLE}" --test "${CMAKE_CURRENT_SOURCE_DIR}/tests/client.mjs")
   add_test(NAME tcp_integration COMMAND "${NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/network.mjs" $<TARGET_FILE:exchange_server>)
   add_test(NAME crash_recovery COMMAND "${NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/crash.mjs" $<TARGET_FILE:exchange_server>)
+  add_test(NAME risk_model COMMAND "${NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/risk_model.mjs" $<TARGET_FILE:exchange_server>)
   add_test(NAME session_concurrency COMMAND "${NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/concurrency.mjs" $<TARGET_FILE:exchange_server>)
-  set_tests_properties(tcp_integration crash_recovery session_concurrency PROPERTIES TIMEOUT 120)
+  set_tests_properties(tcp_integration crash_recovery session_concurrency risk_model PROPERTIES TIMEOUT 120)
   add_test(NAME cli_roundtrip COMMAND ${CMAKE_COMMAND}
     -DEXCHANGE=$<TARGET_FILE:exchange> -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/cli-test
     -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cli.cmake)

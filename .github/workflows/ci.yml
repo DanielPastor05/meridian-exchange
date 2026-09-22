@@ -7,14 +7,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-24.04, windows-2022]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # actions/checkout@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 24.13.0
       - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build --config Release --parallel
       - run: ctest --test-dir build -C Release --output-on-failure
@@ -28,7 +28,7 @@ jobs:
           "$profiler" 1000 1 > build/profile-smoke.csv
           node tools/demo.mjs "$server"
           node tests/crash.mjs "$server" build/crash-report.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
         if: always()
         with:
           name: verification-${{ runner.os }}
@@ -40,39 +40,59 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist/bin
-          node -e 'console.log(JSON.stringify({commit:process.env.GITHUB_SHA,platform:process.platform,arch:process.arch,node:process.version},null,2))' > dist/BUILD-INFO.json
-          if [ "${{ runner.os }}" = "Windows" ]; then cp build/Release/*.exe dist/bin/; else cp build/exchange build/exchange_server build/exchange_bench build/exchange_profile dist/bin/; fi
+          node tools/build-info.mjs build Release > dist/BUILD-INFO.json
+          if [ "${{ runner.os }}" = "Windows" ]; then cp build/Release/*.exe dist/bin/; else cp build/exchange build/exchange_server build/exchange_bench build/exchange_profile build/exchange_service_profile dist/bin/; fi
           cp -r tools tests examples docs bench README.md EMPIEZA-AQUI.md LICENSE dist/
           if [ "${{ runner.os }}" = "Windows" ]; then
             powershell -NoProfile -Command "Compress-Archive -Path dist/* -DestinationPath meridian-Windows.zip"
           else
             tar -czf meridian-Linux.tar.gz -C dist .
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
         with:
           name: meridian-${{ runner.os }}
           path: meridian-${{ runner.os }}.*
   sanitizers:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       CXX: clang++
       ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
       UBSAN_OPTIONS: halt_on_error=1
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # actions/checkout@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 24.13.0
       - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DMERIDIAN_SANITIZE=ON -DMERIDIAN_FUZZ=ON
       - run: cmake --build build --parallel
       - run: ctest --test-dir build --output-on-failure
       - run: node tools/fuzz-seeds.mjs build/corpus
       - run: ./build/exchange_fuzz build/corpus -max_total_time=30 -timeout=5 -max_len=65552 -print_final_stats=1 2> build/fuzz.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
         if: always()
         with:
           name: sanitizers-and-fuzz
           path: |
             build/Testing/Temporary/LastTest.log
             build/fuzz.log
+
+  thread-sanitizer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CXX: clang++
+      TSAN_OPTIONS: halt_on_error=1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.13.0
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DMERIDIAN_TSAN=ON -DMERIDIAN_BUILD_BENCHMARKS=OFF
+      - run: cmake --build build --parallel
+      - run: ctest --test-dir build --output-on-failure -R 'tcp_integration|session_concurrency|risk_model'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: thread-sanitizer
+          path: build/Testing/Temporary/LastTest.log

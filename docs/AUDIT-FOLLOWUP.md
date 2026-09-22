@@ -5,7 +5,7 @@ requires implemented behavior and verification; this document is not acceptance 
 
 - [x] H1: typed integer validation in the Node client and boundary regressions.
 - [x] H2: exact response framing, schemas, correlation and malformed-peer tests.
-- [ ] H3: constant-time level aggregates, independent checks and service-depth measurements.
+- [x] H3: constant-time level aggregates, independent checks and service-depth measurements.
 - [x] H4: bounded reusable book snapshots, concurrent pagination and cost tests.
 - [ ] H5: bounded admission, writer ownership, independent metrics and durable batching evaluation.
 - [ ] H6: recoverable accept errors, resource backoff and injected error tests.
@@ -20,7 +20,7 @@ requires implemented behavior and verification; this document is not acceptance 
 - [ ] Bounded storage/recovery: verified checkpoints, rotation, backup and restore.
 - [ ] Read-only account journal inspection and safe configuration evolution.
 - [ ] Inject storage errors, partial writes and allocation failures in meaningful boundaries.
-- [ ] Independent risk/admission oracle and strengthened crash/parser assertions.
+- [x] Independent risk/admission oracle and strengthened crash/parser assertions.
 - [ ] Concurrent same-account/reconnect tests, incremental framing, TSan and broader fuzzing.
 - [x] Decouple production tools from test fixtures; handle process spawn failures.
 - [ ] Optional tests/tools in CMake, private warnings, reproducible CI/build metadata.
@@ -37,14 +37,18 @@ The owner selected MIT explicitly; LICENSE and release packaging now include it.
 - 13/13 CTest groups passed (43.13 s); earlier 12-group build plus live demo passed.
 - Actual client module: six Node regression groups, including every split position in a response.
 - Aggregates: 80,000 differential commands now compare quotes with an independent vector reference;
-  full-width overflow/recovery is exercised. Deep service benchmarking is still pending.
+  full-width overflow/recovery is exercised. The service-depth profile covers 1k/10k/100k same-price orders,
+  three repetitions each; all pages copy exactly N orders. See bench/results/audit-service-depth.
 - Snapshots: 1,000 one-order pages copy the full book only once; mutation, expiry, eviction and byte budget are checked.
 - Storage: injected short writes, ENOSPC, flush and sync errors poison the live service;
   replay/retry settles each trade once. bad_alloc is injected after matching, during settlement and before result caching.
 - Same-account TCP clients: identical requests execute once; conflicting payloads have one winner;
   reconnect and process restart recover the exact last outcome.
 - Four one-second load smoke scenarios: zero business rejections and transport failures, including shedding.
-- WSL is not installed on this host. Linux, ASan/UBSan, TSan and hosted checks are still pending.
+- Hosted CI for commit 136c012 passed Windows, Linux, ASan/UBSan and the protocol fuzzer:
+  https://github.com/DanielPastor05/meridian-exchange/actions/runs/35783689448
+- The independent JavaScript vector/BigInt oracle passed 4,000 generated risk/matching/accounting transitions.
+- WSL is not installed on this host. The new TSan job and subsequent changes still need hosted verification.
 
 Next architectural block: isolate the single writer behind bounded admission, publish independent operational metrics,
 and preserve durable acknowledgement semantics while evaluating group commit. Then add protected transport,
