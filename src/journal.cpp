@@ -23,7 +23,8 @@ namespace {
 constexpr std::size_t header_size = 32;
 constexpr std::size_t record_size = 60;
 constexpr std::array<unsigned char, 8> magic{'M', 'R', 'D', 'N', 'J', 'N', 'L', '2'};
-using File = std::unique_ptr<std::FILE, decltype(&std::fclose)>;
+struct FileCloser { void operator()(std::FILE* file) const noexcept { std::fclose(file); } };
+using File = std::unique_ptr<std::FILE, FileCloser>;
 
 void put(unsigned char* out, std::uint64_t value, std::size_t size) {
     for (std::size_t i = 0; i < size; ++i) { out[i] = static_cast<unsigned char>(value); value >>= 8; }
@@ -140,7 +141,7 @@ JournalInfo scan_journal(const std::filesystem::path& path, const ReplayCallback
     raw = std::fopen(path.c_str(), "rb");
     if (!raw) throw std::runtime_error("cannot read journal");
 #endif
-    File file(raw, std::fclose);
+    File file(raw);
     return scan(file.get(), [&](auto sequence, const Request& request) {
         if (consume) {
             if (request.account != 0) throw std::runtime_error("account journal requires server replay");
@@ -153,7 +154,7 @@ Journal::Journal(const std::filesystem::path& path, std::size_t capacity, Durabi
                  std::uint64_t configuration, FaultHook fault)
     : configuration_(configuration), durability_(durability), fault_(std::move(fault)) {
     if (capacity == 0 || capacity > 1000000) throw std::invalid_argument("capacity must be 1..1000000");
-    File file(open_writer(path), std::fclose);
+    File file(open_writer(path));
     if (std::filesystem::file_size(path) == 0) {
         std::array<unsigned char, header_size> header{};
         std::copy(magic.begin(), magic.end(), header.begin());

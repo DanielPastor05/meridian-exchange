@@ -183,6 +183,27 @@ void durable_retries() {
     throws([&] { DurableExchange exchange(path, 64, changed, Durability::Sync); }, "changed accounting configuration accepted");
     std::filesystem::remove(path);
 }
+void fatal_failures() {
+    for(const auto stage : {"after_sync", "after_apply"}) {
+        const auto path=std::filesystem::current_path() /
+            (std::string("failure-")+stage+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".journal");
+        const auto request=order(1,1,99,Side::Buy,100,2);
+        {
+            DurableExchange exchange(path,64,configs(),Durability::Sync,[&](std::string_view point) {
+                if(point==stage)throw std::runtime_error("injected fatal failure");
+            });
+            throws([&] { exchange.execute(request); }, "fault did not escape");
+            throws([&] { exchange.execute(request); }, "failed session continued executing");
+        }
+        {
+            DurableExchange exchange(path,64,configs(),Durability::Sync);
+            check(exchange.state().sequence()==1,"durable failed operation was lost");
+            check(exchange.execute(request).code==Code::Accepted,"failed operation could not be retried");
+            check(exchange.state().balance(1).reserved_cash==200,"failed operation executed twice");
+        }
+        std::filesystem::remove(path);
+    }
+}
 } // namespace
 int main() {
     try {
@@ -190,6 +211,7 @@ int main() {
         risk_limits(); std::cout << "PASS risk and integer boundaries\n";
         retries_and_feed(); std::cout << "PASS retry protocol and market-data recovery\n";
         randomized_accounting(); std::cout << "PASS 10000 accounting commands with independent ledger\n";
+        fatal_failures(); std::cout << "PASS poisoned sessions require replay\n";
         durable_retries(); std::cout << "PASS persistent outcomes, kill and configuration protection\n";
         return 0;
     } catch (const std::exception& e) { std::cerr << "FAIL " << e.what() << '\n'; return 1; }

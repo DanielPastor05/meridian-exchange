@@ -47,16 +47,29 @@ try{
  console.log('CHECK A paused socket');
  // A paused socket pipelines queries until its output window fills. Writes occur outside the book lock.
  const slow=net.createConnection({port:server.port,host:'127.0.0.1'});sockets.push(slow);slow.on('error',()=>{});
+ const slowClosed=new Promise(resolve=>slow.once('close',resolve));
  await new Promise(resolve=>slow.once('connect',resolve));slow.write(frame(T.hello,hello(1,'1'.repeat(32))));slow.pause();
  const query=frame(T.events,ints(latest-256n,256));slow.write(Buffer.concat(Array.from({length:1200},()=>query)));
  for(let i=0;i<10;i++)await one.send(T.ping);
  console.log('CHECK healthy ping after slow consumer');
  for(let i=0;i<20;i++){await delay(300);await one.send(T.ping);}
- const slowClosed=new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('slow reader was not evicted')),7000);slow.once('close',()=>{clearTimeout(timer);resolve();});});slow.resume();await slowClosed;
+ let pingFailure;const keepAlive=setInterval(()=>{one.send(T.ping).catch(error=>{pingFailure=error;});},300);
+ let closeTimer;try{slow.resume();await Promise.race([slowClosed,new Promise((_,reject)=>{closeTimer=setTimeout(()=>reject(Error('slow reader was not evicted')),7000);})]);}
+ finally{clearInterval(keepAlive);clearTimeout(closeTimer);}if(pingFailure)throw pingFailure;
  const metrics=values((await one.send(T.metrics)).payload);assert(metrics[3]>=1n);assert(metrics[4]>=1n);
  one.close();two.close();three.close();sockets.forEach(s=>s.destroy());await server.stop();
  server=await start(executable,dir,['--durability','sync']);one=await Client.connect(server.port);await one.login(2,'2'.repeat(32));
  const replay=await one.submit(4,2,32);assert.equal(replay.status,'cancelled');
  const state=values((await one.send(T.account)).payload);assert.equal(state[1],4n);
+ one.close();await server.stop();
+ server=await start(executable,dir,['--max-clients','1','--timeout-ms','2000']);
+ one=await Client.connect(server.port);await one.login(1,'1'.repeat(32));
+ const excess=await Client.connect(server.port);await assert.rejects(excess.login(2,'2'.repeat(32)));excess.close();
+ assert.equal((await one.send(T.ping)).type,T.ping|0x8000);one.close();await delay(100);
+ const idle=net.createConnection({port:server.port,host:'127.0.0.1'});sockets.push(idle);idle.on('error',()=>{});
+ await new Promise(resolve=>idle.once('connect',resolve));idle.write(Buffer.from('MDX'));
+ await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('incomplete frame was not evicted')),5000);idle.once('close',()=>{clearTimeout(timer);resolve();});});
+ await delay(100);one=await Client.connect(server.port);await one.login(1,'1'.repeat(32));await one.send(T.ping);
+ console.log('PASS connection cap and incomplete-frame deadline');
  console.log('PASS TCP sessions, fragmentation, ownership, concurrency, retries, reconnect, malformed input, feed recovery and slow-reader isolation');
 }finally{one?.close();two?.close();three?.close();sockets.forEach(s=>s.destroy());await server?.stop();cleanup(dir);}

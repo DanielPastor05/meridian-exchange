@@ -3,3 +3,6 @@
 *.journal
 *.tmp
 .vs/
+/dist/
+.env
+*.local.conf
