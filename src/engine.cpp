@@ -71,12 +71,14 @@ void Engine::apply(const Command& command, Result& result) {
         return;
     }
     if (existing != orders_.end()) { result.status = Status::DuplicateId; return; }
-    // Admission happens before matching, even if this order could free slots.
-    // This keeps capacity rejection atomic and the contract easy to reproduce.
-    if (free_.empty()) { result.status = Status::Capacity; return; }
+    Levels& opposite = command.side == Side::Buy ? asks_ : bids_;
+    const bool crosses = !opposite.empty() && (command.side == Side::Buy
+        ? opposite.begin()->first <= command.price : opposite.rbegin()->first >= command.price);
+    // A crossing order either finishes on its first maker or consumes that
+    // maker and frees a slot. Therefore any surviving remainder has a slot.
+    if (free_.empty() && !crosses) { result.status = Status::Capacity; return; }
 
     Quantity remaining = command.quantity;
-    Levels& opposite = command.side == Side::Buy ? asks_ : bids_;
     while (remaining != 0 && !opposite.empty()) {
         auto level = command.side == Side::Buy ? opposite.begin() : std::prev(opposite.end());
         if (command.side == Side::Buy ? level->first > command.price : level->first < command.price)
@@ -94,6 +96,56 @@ void Engine::apply(const Command& command, Result& result) {
     if (remaining != 0) rest(command, remaining);
     result.status = Status::Accepted;
     result.remaining = remaining;
+}
+
+std::optional<Order> Engine::find(OrderId id) const {
+    const auto found = orders_.find(id);
+    if (found == orders_.end()) return std::nullopt;
+    return nodes_[found->second].order;
+}
+
+Quote Engine::quote() const {
+    Quote out;
+    const auto total = [&](const Level& level) {
+        Quantity quantity = 0;
+        for (auto slot = level.head; slot != none; slot = nodes_[slot].next) {
+            const auto amount = nodes_[slot].order.quantity;
+            if (amount > std::numeric_limits<Quantity>::max() - quantity)
+                throw std::overflow_error("aggregate quote quantity overflow");
+            quantity += amount;
+        }
+        return quantity;
+    };
+    if (!bids_.empty()) { out.bid = bids_.rbegin()->first; out.bid_quantity = total(bids_.rbegin()->second); }
+    if (!asks_.empty()) { out.ask = asks_.begin()->first; out.ask_quantity = total(asks_.begin()->second); }
+    return out;
+}
+
+bool Engine::would_match(const Command& command, const std::function<bool(OrderId)>& predicate) const {
+    Quantity remaining = command.quantity;
+    const auto inspect = [&](const auto& levels) {
+        for (const auto& [price, level] : levels) {
+            if (command.side == Side::Buy ? price > command.price : price < command.price) break;
+            for (auto slot = level.head; slot != none; slot = nodes_[slot].next) {
+                if (predicate(nodes_[slot].order.id)) return true;
+                const auto amount = std::min(remaining, nodes_[slot].order.quantity);
+                remaining -= amount;
+                if (remaining == 0) return false;
+            }
+        }
+        return false;
+    };
+    if (command.side == Side::Buy) return inspect(asks_);
+    // Walk bids in descending price without constructing a temporary book.
+    for (auto it = bids_.rbegin(); it != bids_.rend(); ++it) {
+        if (it->first < command.price) break;
+        for (auto slot = it->second.head; slot != none; slot = nodes_[slot].next) {
+            if (predicate(nodes_[slot].order.id)) return true;
+            remaining -= std::min(remaining, nodes_[slot].order.quantity);
+            if (remaining == 0) return false;
+        }
+    }
+    return false;
 }
 
 std::vector<Order> Engine::snapshot() const {

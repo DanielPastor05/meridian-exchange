@@ -1,0 +1,308 @@
+[
+  {
+    "durability": "buffered",
+    "rate": 100,
+    "duration": 2000,
+    "offered": 200,
+    "sent": 200,
+    "shed": 0,
+    "completed": 200,
+    "failed": 0,
+    "elapsedMs": 1990.6488,
+    "completedPerSecond": 100.46975639299107,
+    "scheduledLatencyUs": {
+      "samples": 200,
+      "p50": 1120.7000000000562,
+      "p99": 2590.400000000045,
+      "p999": 2888.1999999999834,
+      "max": 2888.1999999999834
+    },
+    "socketLatencyUs": {
+      "samples": 200,
+      "p50": 382.9000000000633,
+      "p99": 651.1000000000422,
+      "p999": 910.0999999999999,
+      "max": 910.0999999999999
+    },
+    "generatorLatenessUs": {
+      "samples": 200,
+      "p50": 717.0999999998457,
+      "p99": 2013.800000000174,
+      "p999": 2483.799999999974,
+      "max": 2483.799999999974
+    },
+    "journalBytes": 12032,
+    "restartToReadyMs": 44.18179999999984,
+    "replayedSequence": 200,
+    "raw": "buffered-100.csv.gz",
+    "maxInFlightPerAccount": 64
+  },
+  {
+    "durability": "buffered",
+    "rate": 1000,
+    "duration": 2000,
+    "offered": 2000,
+    "sent": 2000,
+    "shed": 0,
+    "completed": 2000,
+    "failed": 0,
+    "elapsedMs": 2000.6832,
+    "completedPerSecond": 999.658516650712,
+    "scheduledLatencyUs": {
+      "samples": 2000,
+      "p50": 992.5999999995838,
+      "p99": 3149.699999999939,
+      "p999": 4008.8999999998123,
+      "max": 4042.5999999997657
+    },
+    "socketLatencyUs": {
+      "samples": 2000,
+      "p50": 177.29999999983193,
+      "p99": 470.9000000002561,
+      "p999": 718.2999999999993,
+      "max": 1311.0999999998967
+    },
+    "generatorLatenessUs": {
+      "samples": 2000,
+      "p50": 808.29999999969,
+      "p99": 2820.600000000013,
+      "p999": 3582.999999999629,
+      "max": 3689.0999999995984
+    },
+    "journalBytes": 120032,
+    "restartToReadyMs": 54.418399999999565,
+    "replayedSequence": 2000,
+    "raw": "buffered-1000.csv.gz",
+    "maxInFlightPerAccount": 64
+  },
+  {
+    "durability": "buffered",
+    "rate": 10000,
+    "duration": 2000,
+    "offered": 20000,
+    "sent": 20000,
+    "shed": 0,
+    "completed": 20000,
+    "failed": 0,
+    "elapsedMs": 2001.3817999999992,
+    "completedPerSecond": 9993.09577013242,
+    "scheduledLatencyUs": {
+      "samples": 20000,
+      "p50": 1566.1000000000058,
+      "p99": 5223.999999999251,
+      "p999": 6322.999999999638,
+      "max": 6962.999999999369
+    },
+    "socketLatencyUs": {
+      "samples": 20000,
+      "p50": 374.2000000002008,
+      "p99": 1534.599999999955,
+      "p999": 2016.700000000128,
+      "max": 2319.800000000214
+    },
+    "generatorLatenessUs": {
+      "samples": 20000,
+      "p50": 1189.3999999997504,
+      "p99": 3851.199999999153,
+      "p999": 4687.099999999362,
+      "max": 5191.199999999299
+    },
+    "journalBytes": 1200032,
+    "restartToReadyMs": 75.90859999999975,
+    "replayedSequence": 20000,
+    "raw": "buffered-10000.csv.gz",
+    "maxInFlightPerAccount": 64
+  },
+  {
+    "durability": "buffered",
+    "rate": 100000,
+    "duration": 2000,
+    "burst": true,
+    "offered": 200000,
+    "sent": 19065,
+    "shed": 180935,
+    "completed": 19065,
+    "failed": 0,
+    "elapsedMs": 1930.4351000000006,
+    "completedPerSecond": 9876.011889754798,
+    "scheduledLatencyUs": {
+      "samples": 19065,
+      "p50": 19011.100000000624,
+      "p99": 46457.400000000234,
+      "p999": 46993.59999999979,
+      "max": 46998.4000000004
+    },
+    "socketLatencyUs": {
+      "samples": 19065,
+      "p50": 3501.4000000001033,
+      "p99": 8773.699999999735,
+      "p999": 10729.600000000573,
+      "max": 11668.700000000172
+    },
+    "generatorLatenessUs": {
+      "samples": 19065,
+      "p50": 15850.599999999758,
+      "p99": 42421.400000000176,
+      "p999": 45007.800000000316,
+      "max": 45265.19999999982
+    },
+    "journalBytes": 1143932,
+    "restartToReadyMs": 83.42169999999896,
+    "replayedSequence": 19065,
+    "raw": "buffered-100000-burst.csv.gz",
+    "maxInFlightPerAccount": 64
+  },
+  {
+    "durability": "sync",
+    "rate": 100,
+    "duration": 2000,
+    "offered": 200,
+    "sent": 200,
+    "shed": 0,
+    "completed": 200,
+    "failed": 0,
+    "elapsedMs": 1994.0604000000003,
+    "completedPerSecond": 100.29786459828397,
+    "scheduledLatencyUs": {
+      "samples": 200,
+      "p50": 3238.900000000285,
+      "p99": 34961.90000000024,
+      "p999": 50678.900000000795,
+      "max": 50678.900000000795
+    },
+    "socketLatencyUs": {
+      "samples": 200,
+      "p50": 2451.9000000000233,
+      "p99": 34495.600000000195,
+      "p999": 49069.900000000416,
+      "max": 49069.900000000416
+    },
+    "generatorLatenessUs": {
+      "samples": 200,
+      "p50": 757.1000000007189,
+      "p99": 2511.399999999412,
+      "p999": 2541.1000000003696,
+      "max": 2541.1000000003696
+    },
+    "journalBytes": 12032,
+    "restartToReadyMs": 47.65799999999945,
+    "replayedSequence": 200,
+    "raw": "sync-100.csv.gz",
+    "maxInFlightPerAccount": 64
+  },
+  {
+    "durability": "sync",
+    "rate": 1000,
+    "duration": 2000,
+    "offered": 2000,
+    "sent": 694,
+    "shed": 1306,
+    "completed": 694,
+    "failed": 0,
+    "elapsedMs": 2808.9154000000017,
+    "completedPerSecond": 247.07045288726016,
+    "scheduledLatencyUs": {
+      "samples": 694,
+      "p50": 721639.6000000004,
+      "p99": 956078.6000000008,
+      "p999": 970537.8,
+      "max": 970537.8
+    },
+    "socketLatencyUs": {
+      "samples": 694,
+      "p50": 720314.9000000012,
+      "p99": 955908.7,
+      "p999": 970165.4999999992,
+      "max": 970165.4999999992
+    },
+    "generatorLatenessUs": {
+      "samples": 694,
+      "p50": 526.1000000009517,
+      "p99": 2240.2000000001863,
+      "p999": 3011.900000001333,
+      "max": 3011.900000001333
+    },
+    "journalBytes": 41672,
+    "restartToReadyMs": 54.882800000001225,
+    "replayedSequence": 694,
+    "raw": "sync-1000.csv.gz",
+    "maxInFlightPerAccount": 64
+  },
+  {
+    "durability": "sync",
+    "rate": 10000,
+    "duration": 2000,
+    "offered": 20000,
+    "sent": 584,
+    "shed": 19416,
+    "completed": 584,
+    "failed": 0,
+    "elapsedMs": 2914.9308999999994,
+    "completedPerSecond": 200.34780241274333,
+    "scheduledLatencyUs": {
+      "samples": 584,
+      "p50": 925110.8999999993,
+      "p99": 1080667.4999999988,
+      "p999": 1082659.3999999997,
+      "max": 1082659.3999999997
+    },
+    "socketLatencyUs": {
+      "samples": 584,
+      "p50": 924145.5000000006,
+      "p99": 1079296.1000000015,
+      "p999": 1081850.3,
+      "max": 1081850.3
+    },
+    "generatorLatenessUs": {
+      "samples": 584,
+      "p50": 927.2999999997182,
+      "p99": 2873.700000000099,
+      "p999": 4094.5999999996266,
+      "max": 4094.5999999996266
+    },
+    "journalBytes": 35072,
+    "restartToReadyMs": 52.31660000000193,
+    "replayedSequence": 584,
+    "raw": "sync-10000.csv.gz",
+    "maxInFlightPerAccount": 64
+  },
+  {
+    "durability": "sync",
+    "rate": 100000,
+    "duration": 2000,
+    "burst": true,
+    "offered": 200000,
+    "sent": 673,
+    "shed": 199327,
+    "completed": 673,
+    "failed": 0,
+    "elapsedMs": 2775.3809,
+    "completedPerSecond": 242.48923814385262,
+    "scheduledLatencyUs": {
+      "samples": 673,
+      "p50": 645617.8,
+      "p99": 915053.200000002,
+      "p999": 922406.6999999995,
+      "max": 922406.6999999995
+    },
+    "socketLatencyUs": {
+      "samples": 673,
+      "p50": 644458.499999997,
+      "p99": 913531.5000000009,
+      "p999": 920493.8999999977,
+      "max": 920493.8999999977
+    },
+    "generatorLatenessUs": {
+      "samples": 673,
+      "p50": 1291.7000000015832,
+      "p99": 7279.900000001362,
+      "p999": 10658.299999999144,
+      "max": 10658.299999999144
+    },
+    "journalBytes": 40412,
+    "restartToReadyMs": 48.67569999999978,
+    "replayedSequence": 673,
+    "raw": "sync-100000-burst.csv.gz",
+    "maxInFlightPerAccount": 64
+  }
+]

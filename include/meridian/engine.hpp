@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
+#include <functional>
 #include <map>
 #include <string_view>
 #include <unordered_map>
@@ -14,7 +16,7 @@ using OrderId = std::uint64_t;
 using Price = std::int64_t; // Integer ticks. The instrument defines the tick size.
 using Quantity = std::uint64_t;
 enum class Side : std::uint8_t { Buy = 1, Sell = 2 };
-enum class Kind : std::uint8_t { New = 1, Cancel = 2 };
+enum class Kind : std::uint8_t { New = 1, Cancel = 2, Kill = 3, Resume = 4 };
 enum class Status { Accepted, Cancelled, Invalid, DuplicateId, UnknownId, Capacity };
 std::string_view name(Status status);
 
@@ -26,6 +28,19 @@ struct Command {
     Quantity quantity{};
     static Command cancel(OrderId id) { return {Kind::Cancel, id, Side::Buy, 0, 0}; }
     bool operator==(const Command&) const = default;
+};
+
+struct Request {
+    std::uint64_t account{};
+    std::uint64_t sequence{}; // Per-account request sequence, distinct from log sequence.
+    Command command{};
+    bool operator==(const Request&) const = default;
+};
+
+struct Quote {
+    Price bid{}, ask{};
+    Quantity bid_quantity{}, ask_quantity{};
+    bool operator==(const Quote&) const = default;
 };
 
 struct Trade {
@@ -59,6 +74,9 @@ public:
     explicit Engine(std::size_t capacity = 65536);
     void apply(const Command& command, Result& result);
     [[nodiscard]] std::vector<Order> snapshot() const;
+    [[nodiscard]] std::optional<Order> find(OrderId id) const;
+    [[nodiscard]] Quote quote() const;
+    [[nodiscard]] bool would_match(const Command& command, const std::function<bool(OrderId)>& predicate) const;
     [[nodiscard]] std::uint64_t state_hash() const;
     [[nodiscard]] std::uint64_t sequence() const { return sequence_; }
     [[nodiscard]] std::size_t size() const { return orders_.size(); }

@@ -50,7 +50,10 @@ public:
         if (c.kind != Kind::New || (c.side != Side::Buy && c.side != Side::Sell) ||
             c.price <= 0 || c.quantity == 0) return out;
         for (const auto& o : orders_) if (o.id == c.id) { out.status = Status::DuplicateId; return out; }
-        if (orders_.size() == capacity_) { out.status = Status::Capacity; return out; }
+        bool can_cross = false;
+        for (const auto& order : orders_) if (order.side != c.side &&
+            (c.side == Side::Buy ? order.price <= c.price : order.price >= c.price)) can_cross = true;
+        if (orders_.size() == capacity_ && !can_cross) { out.status = Status::Capacity; return out; }
         out.status = Status::Accepted;
         Quantity remaining = c.quantity;
         while (remaining != 0) {
@@ -132,11 +135,19 @@ void validation_and_capacity() {
     apply(engine, add(2, Side::Sell, 101, 2));
     const auto before = engine.snapshot();
     check(apply(engine, add(1, Side::Sell, 100, 8)).status == Status::DuplicateId, "duplicate ID traded");
-    check(apply(engine, add(3, Side::Sell, 100, 8)).status == Status::Capacity, "full book must reject before trading");
+    check(apply(engine, add(3, Side::Buy, 99, 8)).status == Status::Capacity, "full noncrossing book must reject");
     check(engine.snapshot() == before, "rejected order changed book");
     apply(engine, Command::cancel(1));
     check(apply(engine, add(1, Side::Buy, 100, 1)).status == Status::Accepted, "inactive IDs may be reused");
     throws([] { Engine invalid_engine(0); }, "zero capacity accepted");
+    Engine full(1);
+    apply(full, add(10, Side::Sell, 100, 5));
+    const auto partial = apply(full, add(11, Side::Buy, 100, 2));
+    check(partial.status == Status::Accepted && full.find(10)->quantity == 3,
+          "full book must accept a crossing taker that leaves its maker alive");
+    const auto remainder = apply(full, add(12, Side::Buy, 100, 7));
+    check(remainder.status == Status::Accepted && full.find(12)->quantity == 4,
+          "crossing on a full book must reuse the consumed maker slot");
 }
 
 void integer_boundaries() {
@@ -255,11 +266,11 @@ void torn_tail_and_corruption() {
         journal.append(add(2, Side::Sell, 101, 3));
     }
     const auto complete = bytes(path);
-    check(complete.size() == 24 + 2 * 44, "journal format size changed");
+    check(complete.size() == 32 + 2 * 60, "journal format size changed");
     const auto fixture = directory.path / "damaged.journal";
-    for (std::size_t tail = 1; tail < 44; ++tail) {
+    for (std::size_t tail = 1; tail < 60; ++tail) {
         auto cut = complete;
-        cut.resize(24 + 44 + tail);
+        cut.resize(32 + 60 + tail);
         save(fixture, cut);
         const auto info = scan_journal(fixture);
         check(info.records == 1 && info.incomplete_tail_bytes == tail, "torn tail not reported");
@@ -281,7 +292,7 @@ void torn_tail_and_corruption() {
         throws([&] { Journal writer(fixture, 8, Durability::Buffered); }, "corrupt journal opened for writing");
         check(bytes(fixture) == corrupted, "complete corruption was silently repaired");
     }
-    for (std::size_t size = 1; size < 24; ++size) {
+    for (std::size_t size = 1; size < 32; ++size) {
         save(fixture, std::vector<char>(complete.begin(), complete.begin() + static_cast<std::ptrdiff_t>(size)));
         throws([&] { scan_journal(fixture); }, "incomplete header accepted");
     }

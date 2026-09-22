@@ -1,4 +1,4 @@
-name: C++ correctness
+name: Verify exchange
 on: [push, pull_request]
 permissions:
   contents: read
@@ -9,19 +9,60 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build --config Release --parallel
       - run: ctest --test-dir build -C Release --output-on-failure
+      - name: Verify executable demo and save fault report
+        shell: bash
+        run: |
+          server=./build/exchange_server
+          if [ "${{ runner.os }}" = "Windows" ]; then server=./build/Release/exchange_server.exe; fi
+          node tools/demo.mjs "$server"
+          node tests/crash.mjs "$server" build/crash-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-${{ runner.os }}
+          path: |
+            build/Testing/Temporary/LastTest.log
+            build/crash-report.json
+      - name: Package binaries
+        shell: bash
+        run: |
+          mkdir -p dist/bin
+          if [ "${{ runner.os }}" = "Windows" ]; then cp build/Release/*.exe dist/bin/; else cp build/exchange build/exchange_server build/exchange_bench build/exchange_profile dist/bin/; fi
+          cp -r tools tests examples docs README.md EMPIEZA-AQUI.md dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meridian-${{ runner.os }}
+          path: dist/
   sanitizers:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       CXX: clang++
       ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
       UBSAN_OPTIONS: halt_on_error=1
     steps:
       - uses: actions/checkout@v4
-      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DMERIDIAN_SANITIZE=ON
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DMERIDIAN_SANITIZE=ON -DMERIDIAN_FUZZ=ON
       - run: cmake --build build --parallel
       - run: ctest --test-dir build --output-on-failure
+      - run: node tools/fuzz-seeds.mjs build/corpus
+      - run: ./build/exchange_fuzz build/corpus -max_total_time=30 -timeout=5 -max_len=65552 -print_final_stats=1 2> build/fuzz.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sanitizers-and-fuzz
+          path: |
+            build/Testing/Temporary/LastTest.log
+            build/fuzz.log

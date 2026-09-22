@@ -1,169 +1,66 @@
 # Meridian Exchange
 
-A deterministic, single-instrument limit-order matching engine in C++20.
-Price-time priority, partial fills, cancellation, a checksummed command journal,
-and a deliberately simple reference engine that checks every execution and the
-entire book across 80,000 generated commands.
+[![Verify exchange](https://github.com/DanielPastor05/meridian-exchange/actions/workflows/ci.yml/badge.svg)](https://github.com/DanielPastor05/meridian-exchange/actions/workflows/ci.yml)
 
-**Status: working local foundation.** This release has a console gateway and a
-core benchmark. Network transport, account risk limits and market-data feeds are
-future milestones. Performance numbers measure the in-memory core; they do not
-measure a production exchange or a durable acknowledgement.
+A C++20 exchange simulator for studying matching, crash recovery and the difference between core latency and durable acknowledgements.
 
-## Build and run
+One instrument, price/time FIFO, partial fills and cancellation. A bounded binary TCP gateway adds authenticated accounts, integer risk checks, cash/inventory reservations, persistent request deduplication, a kill switch and a sequenced trade/top-of-book feed.
 
-Requires CMake 3.20+ and a C++20 compiler. No third-party runtime dependencies.
+## Run the demonstration
+
+Requires CMake 3.20+, a C++20 compiler and Node.js 24 for client/testing tools. C++ executables use only the standard library and OS APIs. There are no npm packages.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
+# Linux:
+node tools/demo.mjs ./build/exchange_server
+# Windows / Visual Studio:
+node tools/demo.mjs ./build/Release/exchange_server.exe
 ```
 
-Linux, with a fresh journal:
+The demo starts its own server, crosses orders from two independent clients, verifies the balances, forcibly restarts the server, retries without executing twice, and activates the account kill switch. Temporary files are removed afterwards.
+
+## Interactive session
 
 ```sh
-./build/exchange run --journal demo.journal --input examples/session.txt
-./build/exchange replay demo.journal
-./build/exchange_bench 200000 5
+./build/exchange_server --journal demo.journal --accounts examples/accounts.conf --port 9000
+# A second terminal: account 1 rests a sell.
+node tools/client.mjs --account 1 --token 11111111111111111111111111111111 new 1 10 SELL 100 10
+# Another client: account 2 buys four at the maker's price of 100.
+node tools/client.mjs --account 2 --token 22222222222222222222222222222222 new 1 20 BUY 105 4
+node tools/client.mjs --account 1 --token 11111111111111111111111111111111 account
 ```
 
-Windows, with the Visual Studio generator:
+On Windows use `build/Release/exchange_server.exe`. Tokens in examples are public fixtures; the default bind address is loopback. Authentication is a plain binary token protocol without TLS. Use only a local or independently secured, trusted network.
 
-```powershell
-.\build\Release\exchange.exe run --journal demo.journal --input examples/session.txt
-.\build\Release\exchange.exe replay demo.journal
-.\build\Release\exchange_bench.exe 200000 5
+Requests carry a per-account sequence starting at one. The **last** identical request returns its original outcome after reconnect/restart. Conflicting, older and skipped sequences cannot execute. Keep one unacknowledged request per account when recovery of its exact response matters. IDs identify active orders, not retry keys.
+
+## What the tests establish
+
+- 80,000 commands compared after every operation with an independent vector reference book.
+- 10,000 account operations checked against an independent cash/inventory ledger, plus explicit risk and reservation boundaries.
+- Real TCP clients: fragmented/malformed messages, ownership, concurrency, retries, feed gaps and slow-reader isolation.
+- External process termination at seven append/sync/apply/response boundaries; recovery preserves acknowledged history and settles a trade once.
+- Every incomplete final record length, byte corruption, writer exclusion, parser boundary tests and 100,000 structured parser mutations.
+- Hosted Windows/MSVC, Linux/GCC and Linux/Clang ASan/UBSan jobs; a separate bounded libFuzzer run. See the linked workflow for actual status and artifacts.
+
+## Performance with evidence
+
+The core profiler uses 1k, 10k and 100k resting orders, separate cancellation/insertion/partial/full-fill distributions, allocation counts and ID-lookup timings. The independent Node load generator schedules demand on a fixed timeline and records client admission shedding, scheduler lateness and every completed request. It measures buffered and disk-synchronized acknowledgements separately.
+
+```sh
+./build/exchange_profile 100000 3
+node tools/load.mjs ./build/exchange_server bench/results/my-run
 ```
 
-Reopening a journal restores its book and continues its sequence. To repeat the
-example as a fresh session, use a new journal path. Re-submitting the same input
-is a new set of commands, not a replay.
+See [performance](docs/PERFORMANCE.md), [raw measurements](bench/results/windows-2026-09-22), [verification](docs/VALIDATION.md), [wire protocol](docs/PROTOCOL.md) and [design/failure contract](docs/DESIGN.md). The tiny-book `exchange_bench` remains a historical microbenchmark, not an end-to-end latency claim.
 
-The example's buy order 4 fills seven units from order 1 and three from order 2,
-both at 10005 ticks. After the cancellation and final buy, order 5 rests with two
-units at 10012. Read-only replay must produce exactly the same book and fingerprint.
+## Scope
 
-## Commands and contract
+Sync mode appends and calls `fsync` / `_commit` before applying each new request and replying. Buffered mode omits disk synchronization and can lose acknowledged operations after power failure. A complete corrupt record stops recovery; an incomplete final record is truncated. Journal v2 deliberately rejects the old v1 format.
 
-```text
-NEW 1 SELL 10005 7
-NEW 2 BUY 10005 3
-CANCEL 1
-BOOK
-```
+The implementation is an engineering simulator, not a deployed financial venue. It has one serialized book, GTC limit orders, funded long-only accounts and a bounded polling feed. It does not provide multi-symbol routing, market/IOC orders, replacement, replicated consensus, cross-account settlement or exchange connectivity. [Scope decisions](docs/ROADMAP.md) explain when batching, checkpointing and different data structures would be justified.
 
-- One instrument per engine. Prices are positive signed 64-bit integer ticks;
-  quantities and IDs are unsigned 64-bit integers. The instrument's tick size is
-  external to the matching core. No floating-point money arithmetic.
-- Limit orders are good-till-cancelled. Best price wins, then arrival order.
-  Executions use the resting maker's price. Unfilled incoming quantity rests.
-- Order IDs are unique **among active orders**. Reuse after cancellation or full
-  execution is allowed. An order ID is not an idempotency key.
-- Cancelling removes the remaining quantity. Unknown IDs are rejected.
-- Zero ID, nonpositive price, zero quantity and invalid enum values are rejected.
-  Duplicate IDs and full capacity are rejected before any matching occurs.
-- Admission reserves an available order slot even for a potentially fully
-  executable incoming order. A full book rejects all new orders until a cancel
-  frees a slot. This conservative policy is part of the replay contract.
-- The CLI journals every syntactically parsed command, including engine
-  rejections. Malformed text is reported on stderr, consumes no sequence, and
-  causes exit code 2 after the remaining lines have been processed.
-- `BOOK` reads state without consuming a sequence. Output is JSON Lines. IDs,
-  prices, quantities, sequences and fingerprints are decimal **strings** to
-  preserve 64-bit values in JavaScript consumers.
-
-Run without arguments for the CLI options. Capacity defaults to 65,536 orders;
-`--capacity N` selects 1..1,000,000 and is recorded in the journal header.
-
-## Architecture
-
-```text
-text input -> parse -> append journal -> flush/sync -> apply -> JSON response
-                                                   |
-                     restart: replay commands -----+
-
-matching core:
-  ordered price levels -> FIFO linked slots in a preallocated order pool
-  order-ID hash index  -> direct cancellation lookup
-```
-
-One thread owns each book. The order pool and free-slot stack are preallocated.
-Price levels use `std::map`, and the ID index uses `std::unordered_map`. Those
-containers still allocate nodes; this implementation does not claim zero
-allocations. Trade output can also grow unless the caller reserves its buffer.
-
-These choices make a small, verifiable baseline. Profile allocation cost and
-price-level lookup before replacing either structure. See [DESIGN.md](docs/DESIGN.md)
-for complexity, persistence and recovery details.
-
-## What is checked
-
-`exchange_tests` contains named scenarios plus 20 deterministic random seeds,
-4,000 commands each, against a vector-based reference implementation. Both engines
-must produce the same status, sequence, remaining quantity, ordered trades and
-complete resting book after **every command**. Checks remain active in Release.
-
-Additional checks cover cancellation at the head/middle/tail, slot reuse, integer
-limits, rejection without partial effects, replay of accepted and rejected
-commands, writer exclusion, all 43 incomplete record-tail lengths, every
-single-byte corruption in a two-record fixture, and incomplete headers.
-
-CTest also runs a benchmark smoke check and a CLI test spanning initial input,
-read-only replay, restart/cancellation, and malformed numeric input.
-
-The GitHub Actions workflow is configured for Windows/MSVC, Linux/GCC and
-Linux/Clang with address/undefined-behavior sanitizers. Local verification results
-are recorded separately in [VALIDATION.md](docs/VALIDATION.md); a workflow file
-alone is not evidence that those remote jobs have run.
-
-## Benchmark method
-
-`exchange_bench [commands=200000] [repetitions=5]` emits CSV with raw repetitions
-in comment lines. Inputs are generated before timing. One untabulated warm-up
-precedes the repeated throughput runs. A separate instrumented run measures
-individual command latency and checks the final fingerprint again.
-
-| Workload | Operations | Peak resting orders |
-|---|---|---:|
-| `rest_cancel` | Add 32 noncrossing orders, then cancel them | 32 |
-| `cross` | Add a sell, fully cross it with a buy | 1 |
-| `sweep` | Add 32 sells at eight levels, cross them with one buy | 32 |
-
-This is a **small-book, synthetic, closed-loop baseline**. Per-command latency
-includes clock instrumentation. The sweep percentiles mix cheap adds and expensive
-sweeps. Report the distribution and workload, not a single universal latency.
-It excludes parsing, network queues, storage and durable responses. It does not
-measure overload, production market traffic, or many-symbol capacity.
-
-Keep the raw CSV, compiler/build settings, CPU/OS, power policy and workload with
-any published result. No performance threshold is asserted in shared-runner CI.
-
-## Durability and limitations
-
-`sync` is the default: each command is written and synchronized using `fsync`
-(POSIX) or `_commit` (Windows) **before** applying it and returning a result.
-`buffered` flushes the C library stream to the OS but skips the storage sync;
-power loss may lose acknowledged commands. Device/filesystem guarantees still
-bound what a storage sync means.
-
-Reopening validates the header, checksums and sequence. Only an incomplete final
-record is discarded. A complete record with a bad checksum fails closed. Read-only
-replay reports incomplete tail bytes and never modifies the file. Run read-only
-replay against a stopped writer or a stable copy, not a growing journal.
-
-A crash after journaling but before returning can commit an operation for which
-the caller never received a response. There is no exactly-once request protocol.
-Allocation or I/O failures are fatal to the session: reopen and replay before
-continuing. Disk corruption detection is not replication or automatic repair.
-
-This version has no network gateway, authentication, account ledger, self-trade
-prevention, market orders, auctions, amendments, snapshots or journal rotation.
-It is an engineering simulator. The [roadmap](docs/ROADMAP.md) defines the next
-three measurable stages toward a stronger internship portfolio project.
-
-## Authorship
-
-This initial implementation was generated with Codex assistance. Treat the
-reference tests, measurements, subsequent design decisions and your ability to
-explain and modify the code as the evidence of engineering work.
+Generated with Codex assistance. The useful portfolio evidence is reproducible behavior, honest measurements, and the author's ability to explain and change the design. [Spanish starting guide](EMPIEZA-AQUI.md).

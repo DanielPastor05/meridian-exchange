@@ -1,0 +1,10 @@
+{
+  "date": "2026-09-22T19:40:36.874Z",
+  "platform": "win32",
+  "release": "10.0.26200",
+  "cpu": "AMD Ryzen 5 5500                               ",
+  "logicalCpus": 12,
+  "totalMemory": 17067794432,
+  "node": "v24.13.0",
+  "notes": "Client and server share one unpinned host; no NIC, TLS, CPU isolation or power-loss simulation. Node scheduler lateness included. Three accounts, 64 in-flight requests per account; shed demand is reported, not a measured server saturation ceiling."
+}

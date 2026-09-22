@@ -1,0 +1,65 @@
+[
+  {
+    "stage": "before_append",
+    "externalTermination": true,
+    "acknowledged": false,
+    "sequenceBeforeRetry": "1",
+    "sequenceAfterRetry": "3",
+    "journalBytesAtCrash": 152,
+    "result": "pass"
+  },
+  {
+    "stage": "mid_append",
+    "externalTermination": true,
+    "acknowledged": false,
+    "sequenceBeforeRetry": "1",
+    "sequenceAfterRetry": "3",
+    "journalBytesAtCrash": 182,
+    "result": "pass"
+  },
+  {
+    "stage": "after_write",
+    "externalTermination": true,
+    "acknowledged": false,
+    "sequenceBeforeRetry": "1",
+    "sequenceAfterRetry": "3",
+    "journalBytesAtCrash": 182,
+    "result": "pass"
+  },
+  {
+    "stage": "after_sync",
+    "externalTermination": true,
+    "acknowledged": false,
+    "sequenceBeforeRetry": "2",
+    "sequenceAfterRetry": "3",
+    "journalBytesAtCrash": 212,
+    "result": "pass"
+  },
+  {
+    "stage": "after_apply",
+    "externalTermination": true,
+    "acknowledged": false,
+    "sequenceBeforeRetry": "2",
+    "sequenceAfterRetry": "3",
+    "journalBytesAtCrash": 212,
+    "result": "pass"
+  },
+  {
+    "stage": "before_response",
+    "externalTermination": true,
+    "acknowledged": false,
+    "sequenceBeforeRetry": "2",
+    "sequenceAfterRetry": "3",
+    "journalBytesAtCrash": 212,
+    "result": "pass"
+  },
+  {
+    "stage": "after_response",
+    "externalTermination": true,
+    "acknowledged": true,
+    "sequenceBeforeRetry": "2",
+    "sequenceAfterRetry": "3",
+    "journalBytesAtCrash": 212,
+    "result": "pass"
+  }
+]

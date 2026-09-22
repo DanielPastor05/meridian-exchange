@@ -1,53 +1,13 @@
-# Portfolio milestones
+# Scope decisions
 
-The current deliverable is a tested core and recovery baseline. Complete one
-stage and publish its evidence before increasing scope.
+The requested release covers six stages: network sessions; persistent retry safety; representative measurements; funded account risk; fault/corruption verification; and public reproducibility with hosted CI and runnable artifacts. The executable evidence is tracked in COMPLETION.md.
 
-## 1. Explain and measure the baseline
+## Decisions from the measurements
 
-- Reproduce tests and benchmark on your own machine. Record compiler, CPU, build
-  flags, power policy and raw repetitions.
-- Add larger books and realistic mixes of cancels, partial fills and price moves.
-  Distinguish latency by operation type and run a load generator independently.
-- Profile allocation, cache misses and branch misses. Change one measured
-  bottleneck and retain the before/after data plus negative results.
-- Explain FIFO preservation, the full-book admission rule, and why a persisted
-  command may lack a response. Implement one behavior change yourself with a
-  regression test.
+- Keep ordered maps and the hash ID index for this release. The 100k-order core run costs roughly 176 ns per operation on this desktop, with 0.6 allocations per command and approximately 114 ns per successful randomized ID lookup. Those are workload-specific observations, not proof that allocation or cache misses dominate all traffic. No hardware cache/branch counter claim is made.
+- Keep one serialized writer. TCP loopback with buffered journaling sustained the offered 10k requests/s in the recorded two-second sample. Lock-free queues, CPU pinning and a poll-mode network stack have not been justified by an isolated transport profile. The Node generator and desktop scheduler are material parts of end-to-end latency.
+- Per-request storage sync dominates durable throughput on the measured machine: about 200–247 completed requests/s under overload. A future group-commit mode should batch log writes, synchronize once, and acknowledge only the synchronized prefix. It must repeat the fault matrix and publish batch-size versus tail-latency results. Buffered mode is not a substitute for this guarantee.
+- Restart through the measured 20k-record, 1.2 MB journal took about 76 ms including process startup. Checkpoint/rotation is deferred until a measured recovery-time/disk budget justifies it. This observation does not predict million-record recovery. Long-running deployments would require that budget and backup policy.
+- Replication and consensus are outside the single-node simulator's contract. Add them only with an explicit availability objective and failure model; local fsync is not replication.
 
-Completion: a concise performance report that can be reproduced from one commit.
-
-## 2. Add a bounded TCP gateway and market-data stream
-
-- Define versioned binary messages with explicit byte order, lengths, request
-  sequence and error codes. Include parsing fuzz tests and bounded buffers.
-- Preserve a single writer for each book. Measure whether SPSC queues help before
-  replacing a simpler transport arrangement.
-- Handle fragmented reads, slow clients, disconnects and session retries with an
-  explicit idempotency policy. A rejected duplicate must never execute again.
-- Sequence market-data events and provide a snapshot/recovery route for consumers
-  that miss updates.
-- Measure end-to-end latency at specified offered loads, including rejections and
-  backlog. Keep this separate from the core microbenchmark and disk-sync latency.
-
-Completion: a live demo with two independent clients, replayable traffic and a
-documented overload policy. No connection to real-money venues is required.
-
-## 3. Add account risk and demonstrate failure recovery
-
-- Introduce account/session identity, maximum order size and integer notional
-  checks with explicit overflow handling, plus a kill switch.
-- Define reservations and released exposure for partial fills and cancellations
-  before implementing them; compare against a simple accounting model.
-- Automate killing the process at controlled points around append, sync, apply
-  and response. Compare restarted state with the acknowledged command history.
-- Add checkpoints and rotation only after replay time justifies them. Test the
-  boundary between the checkpoint and subsequent journal records.
-
-Completion: a short demo, a failure matrix and a report showing exactly which
-acknowledgements and account invariants survive each tested fault.
-
-The strongest final presentation is a five-minute explanation with reproducible
-evidence and a code change you can make live. Keep the README short; put long
-experiments in separate reports. Further concurrency or replication should follow
-a measured need.
+These are documented extensions, not hidden claims of production readiness. Market orders, amendments, multi-instrument routing, real-money connectivity and a graphical dashboard were not prerequisites for this release.
