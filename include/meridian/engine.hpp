@@ -92,7 +92,21 @@ private:
         std::size_t next{none};
         bool used{};
     };
-    struct Level { std::size_t head{none}; std::size_t tail{none}; };
+    struct Level {
+        std::size_t head{none}, tail{none};
+        // Two limbs preserve the standalone core's full uint64 order range.
+        // quote() reports overflow only while the aggregate cannot fit a Quantity.
+        Quantity quantity{}, quantity_high{};
+        void add(Quantity amount) {
+            const auto before = quantity;
+            quantity += amount;
+            if (quantity < before) ++quantity_high;
+        }
+        void remove(Quantity amount) {
+            if (quantity < amount) --quantity_high;
+            quantity -= amount;
+        }
+    };
     using Levels = std::map<Price, Level>;
     Levels bids_, asks_;
     std::vector<Node> nodes_;

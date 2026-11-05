@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <functional>
+#include <memory>
 
 namespace meridian {
 enum class Durability { Sync, Buffered };
@@ -17,11 +18,23 @@ struct JournalInfo {
 using ReplayCallback = std::function<void(std::uint64_t, const Command&)>;
 using RequestCallback = std::function<void(std::uint64_t, const Request&)>;
 JournalInfo scan_journal(const std::filesystem::path& path, const ReplayCallback& consume = {});
+// Read-only and safe beside a running writer: it takes no lock, and a record still being
+// written reads as an incomplete tail. Never truncates anything.
+JournalInfo scan_journal_requests(const std::filesystem::path& path, const RequestCallback& consume = {});
+
+// Replaceable OS I/O boundary for short-write, flush and sync fault tests.
+class JournalIO {
+public:
+    virtual ~JournalIO() = default;
+    virtual std::size_t write(std::FILE* file, const unsigned char* bytes, std::size_t size);
+    virtual int flush(std::FILE* file);
+    virtual int sync(std::FILE* file);
+};
 
 class Journal {
 public:
     Journal(const std::filesystem::path& path, std::size_t capacity, Durability durability,
-            std::uint64_t configuration = 0, FaultHook fault = {});
+            std::uint64_t configuration = 0, FaultHook fault = {}, std::shared_ptr<JournalIO> io = {});
     ~Journal();
     Journal(const Journal&) = delete;
     Journal& operator=(const Journal&) = delete;
@@ -37,6 +50,7 @@ private:
     Durability durability_;
     bool failed_{};
     FaultHook fault_;
+    std::shared_ptr<JournalIO> io_;
     void flush();
 };
 } // namespace meridian

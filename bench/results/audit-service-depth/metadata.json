@@ -1,0 +1,20 @@
+{
+  "commit": "136c0127ddb2b46d9fe6c6994e4ba146895fb37c",
+  "dirty": true,
+  "platform": "win32",
+  "architecture": "x64",
+  "osRelease": "10.0.26200",
+  "runnerImage": null,
+  "runnerImageVersion": null,
+  "node": "v24.13.0",
+  "configuration": "Release",
+  "compilerId": "MSVC",
+  "compilerVersion": "19.44.35228.0",
+  "compilerPath": "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/Hostx86/x64/cl.exe",
+  "generator": "Visual Studio 17 2022",
+  "flags": [
+    "/DWIN32 /D_WINDOWS /EHsc",
+    "/O2 /Ob2 /DNDEBUG"
+  ],
+  "cmake": "3.31.6"
+}

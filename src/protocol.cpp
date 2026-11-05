@@ -67,7 +67,7 @@ Frame error(std::uint64_t code) { Writer out; out.u64(code); return {Error, std:
 Frame account(AccountId id, const ExchangeState& state, std::uint16_t type) {
     Writer out;
     out.u64(id); out.u64(state.last_request(id)); out.u64(state.sequence());
-    out.u64(state.feed(std::numeric_limits<std::uint64_t>::max(),1).latest);
+    out.u64(state.event_sequence());
     out.balance(state.balance(id)); out.quote(state.quote());
     return {static_cast<std::uint16_t>(type | 0x8000), std::move(out.bytes)};
 }

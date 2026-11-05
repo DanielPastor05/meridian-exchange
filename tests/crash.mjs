@@ -18,12 +18,12 @@ for(const stage of ['before_append','mid_append','after_write','after_sync','aft
   let acknowledgement=null;
   const pending=client.submit(2,1,11,1,105,3).then(r=>{acknowledgement=r;return r;},()=>null);
   await server.waitFor('fault_ready');
-  if(stage==='after_response')await pending;
+  if(stage==='after_response'){await pending;assert(acknowledgement,'after_response did not deliver an acknowledgement');}
   await server.stop();await pending;client.close();
   const tornSize=fs.statSync(path.join(dir,'server.journal')).size;
   server=await start(executable,dir);client=await Client.connect(server.port);await client.login(1,'1'.repeat(32));
   const before=values((await client.send(T.account)).payload);
-  assert(before[1]===1n||before[1]===2n);assert(before[2]>=prefix.globalSequence,'acknowledged prefix disappeared');
+  assert(before[1]===1n||before[1]===2n);if(['before_append','mid_append'].includes(stage))assert.equal(before[1],1n,'uncommitted target survived');assert(before[2]>=prefix.globalSequence,'acknowledged prefix disappeared');
   if(['after_sync','after_apply','before_response','after_response'].includes(stage))assert.equal(before[1],2n,'durable command missing');
   const outcome=await client.submit(2,1,11,1,105,3);assert.equal(outcome.status,'accepted');
   if(acknowledgement)assert.deepEqual(outcome,acknowledgement,'acknowledged result changed after restart');

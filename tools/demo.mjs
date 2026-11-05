@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {Client,T,values,json,ints} from './wire.mjs';
-import {directory,cleanup,start} from '../tests/network_helpers.mjs';
+import {directory,cleanup,start} from './demo-environment.mjs';
 const executable=process.argv[2];if(!executable)throw Error('Usage: node tools/demo.mjs PATH_TO_EXCHANGE_SERVER');
 const dir=directory();let server,buyer,seller;
 try{

@@ -23,14 +23,16 @@ try{
  assert(replies.every(r=>r.status==='accepted'));assert.equal(new Set(replies.map(r=>r.globalSequence)).size,3);
  const book=values((await one.send(T.book,ints(0,0,256))).payload);assert.equal(book[2],3n);const version=book[1];
  await one.submit(6,2,31);
- assert.equal(values((await one.send(T.book,ints(1,version,256))).payload)[0],1n);
+ const retained=values((await one.send(T.book,ints(1,version,256))).payload);
+  assert.equal(retained[0],0n);assert.equal(retained[1],version);assert.equal(retained[2],3n);assert.equal(retained[4],2n);
+  assert.equal(values((await one.send(T.book,ints(1,999999,256))).payload)[0],1n);
  const events=values((await one.send(T.events,ints(0,256))).payload);assert.equal(events[0],0n);assert(events[6]>0);
  const bad=await Client.connect(server.port);await assert.rejects(bad.login(1,'f'.repeat(32)));bad.close();
  const unauth=await Client.connect(server.port);assert.equal((await unauth.send(T.account)).type,T.error);unauth.close();
  console.log('CHECK A malformed frame');
  // A malformed frame must close only its own connection, without advancing the log.
  const malformed=await Client.connect(server.port);await malformed.login(1,'1'.repeat(32));
- await assert.rejects(malformed.send(T.submit,request(7,999,1,1,100,1)));malformed.close();
+ await assert.rejects(malformed.send(T.submit,ints(7,999,1,1,100,1)));malformed.close();
  const oversized=net.createConnection({port:server.port,host:'127.0.0.1'});sockets.push(oversized);oversized.on('error',()=>{});
  await new Promise(resolve=>oversized.once('connect',resolve));const invalid=frame(T.hello);invalid.writeUInt32BE(65537,8);oversized.write(invalid);
  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('oversized frame not closed')),3000);oversized.once('close',()=>{clearTimeout(timer);resolve();});});

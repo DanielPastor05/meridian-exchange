@@ -124,7 +124,7 @@ void randomized_accounting() {
         } else request = order(account, seq, next_id++, rng()%2 == 0 ? Side::Buy : Side::Sell,
                                95 + static_cast<Price>(rng()%11), 1 + rng()%15);
         const auto before = state.snapshot();
-        const auto event_start = state.feed(std::numeric_limits<std::uint64_t>::max(), 1).latest;
+        const auto event_start = state.event_sequence();
         const auto result = run(state, request);
         if (result.code == Code::Accepted) owner[request.command.id] = account;
         const auto events = state.feed(event_start, 256);

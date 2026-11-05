@@ -61,8 +61,8 @@ void truncate(std::FILE* file, std::uint64_t size) {
 #endif
     if (status != 0) throw std::runtime_error("cannot truncate incomplete journal tail");
 }
-void write(std::FILE* file, const unsigned char* bytes, std::size_t size) {
-    if (std::fwrite(bytes, 1, size, file) != size) throw std::runtime_error("journal write failed");
+void write(JournalIO& io, std::FILE* file, const unsigned char* bytes, std::size_t size) {
+    if (io.write(file, bytes, size) != size) throw std::runtime_error("journal write failed");
 }
 
 void sync_parent(const std::filesystem::path& path) {
@@ -120,7 +120,7 @@ std::FILE* open_writer(const std::filesystem::path& path) {
     auto* file = _fdopen(descriptor, "r+b");
     if (!file) { _close(descriptor); throw std::runtime_error("cannot open journal stream"); }
 #else
-    const int descriptor = open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+    const int descriptor = open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
     if (descriptor < 0) throw std::runtime_error("cannot open journal");
     if (flock(descriptor, LOCK_EX | LOCK_NB) != 0) {
         close(descriptor); throw std::runtime_error("journal already has a writer");
@@ -133,15 +133,36 @@ std::FILE* open_writer(const std::filesystem::path& path) {
 
 } // namespace
 
-JournalInfo scan_journal(const std::filesystem::path& path, const ReplayCallback& consume) {
-    std::FILE* raw = nullptr;
+std::size_t JournalIO::write(std::FILE* file, const unsigned char* bytes, std::size_t size) {
+    return std::fwrite(bytes, 1, size, file);
+}
+int JournalIO::flush(std::FILE* file) { return std::fflush(file); }
+int JournalIO::sync(std::FILE* file) {
 #ifdef _WIN32
-    if (_wfopen_s(&raw, path.c_str(), L"rb") != 0) throw std::runtime_error("cannot read journal");
+    return _commit(_fileno(file));
 #else
-    raw = std::fopen(path.c_str(), "rb");
-    if (!raw) throw std::runtime_error("cannot read journal");
+    return fsync(fileno(file));
 #endif
-    File file(raw);
+}
+
+// Shared for reading on Windows, where _wfopen_s would refuse a file a writer has open.
+static std::FILE* open_for_reading(const std::filesystem::path& path) {
+#ifdef _WIN32
+    auto* raw = _wfsopen(path.c_str(), L"rb", _SH_DENYNO);
+#else
+    auto* raw = std::fopen(path.c_str(), "rb");
+#endif
+    if (!raw) throw std::runtime_error("cannot read journal");
+    return raw;
+}
+
+JournalInfo scan_journal_requests(const std::filesystem::path& path, const RequestCallback& consume) {
+    File file(open_for_reading(path));
+    return scan(file.get(), consume);
+}
+
+JournalInfo scan_journal(const std::filesystem::path& path, const ReplayCallback& consume) {
+    File file(open_for_reading(path));
     return scan(file.get(), [&](auto sequence, const Request& request) {
         if (consume) {
             if (request.account != 0) throw std::runtime_error("account journal requires server replay");
@@ -151,8 +172,9 @@ JournalInfo scan_journal(const std::filesystem::path& path, const ReplayCallback
 }
 
 Journal::Journal(const std::filesystem::path& path, std::size_t capacity, Durability durability,
-                 std::uint64_t configuration, FaultHook fault)
-    : configuration_(configuration), durability_(durability), fault_(std::move(fault)) {
+                  std::uint64_t configuration, FaultHook fault, std::shared_ptr<JournalIO> io)
+    : configuration_(configuration), durability_(durability), fault_(std::move(fault)),
+      io_(io ? std::move(io) : std::make_shared<JournalIO>()) {
     if (capacity == 0 || capacity > 1000000) throw std::invalid_argument("capacity must be 1..1000000");
     File file(open_writer(path));
     if (std::filesystem::file_size(path) == 0) {
@@ -162,8 +184,8 @@ Journal::Journal(const std::filesystem::path& path, std::size_t capacity, Durabi
         put(header.data() + 12, capacity, 8);
         put(header.data() + 20, configuration, 8);
         put(header.data() + 28, crc32(header.data(), 28), 4);
-        write(file.get(), header.data(), header.size());
-        if (std::fflush(file.get()) != 0) throw std::runtime_error("journal header flush failed");
+        write(*io_, file.get(), header.data(), header.size());
+        if (io_->flush(file.get()) != 0) throw std::runtime_error("journal header flush failed");
     }
     const auto info = scan(file.get(), {});
     if (info.capacity != capacity) throw std::runtime_error("journal capacity differs from engine capacity");
@@ -183,15 +205,9 @@ Journal::Journal(const std::filesystem::path& path, std::size_t capacity, Durabi
 Journal::~Journal() { if (file_) std::fclose(file_); }
 
 void Journal::flush() {
-    if (std::fflush(file_) != 0) throw std::runtime_error("journal flush failed");
-    if (durability_ == Durability::Sync) {
-#ifdef _WIN32
-        const int status = _commit(_fileno(file_));
-#else
-        const int status = fsync(fileno(file_));
-#endif
-        if (status != 0) throw std::runtime_error("journal disk synchronization failed");
-    }
+    if (io_->flush(file_) != 0) throw std::runtime_error("journal flush failed");
+    if (durability_ == Durability::Sync && io_->sync(file_) != 0)
+        throw std::runtime_error("journal disk synchronization failed");
 }
 
 JournalInfo Journal::replay(const ReplayCallback& consume) {
@@ -203,9 +219,15 @@ JournalInfo Journal::replay(const ReplayCallback& consume) {
 
 JournalInfo Journal::replay_requests(const RequestCallback& consume) {
     if (failed_) throw std::runtime_error("journal session failed; reopen before use");
-    const auto info = scan(file_, consume);
-    seek(file_, header_size + sequence_ * record_size);
-    return info;
+    try {
+        const auto info = scan(file_, consume);
+        seek(file_, header_size + sequence_ * record_size);
+        return info;
+    } catch (...) {
+        // A callback can fail between records, leaving an unsafe append position.
+        failed_ = true;
+        throw;
+    }
 }
 
 void Journal::append(const Request& request) {
@@ -231,12 +253,12 @@ void Journal::append(const Request& request) {
     try {
         if (fault_) {
             fault_("before_append");
-            write(file_, record.data(), record.size() / 2);
-            if (std::fflush(file_) != 0) throw std::runtime_error("fault-injection flush failed");
+            write(*io_, file_, record.data(), record.size() / 2);
+            if (io_->flush(file_) != 0) throw std::runtime_error("fault-injection flush failed");
             fault_("mid_append");
-            write(file_, record.data() + record.size() / 2, record.size() - record.size() / 2);
+            write(*io_, file_, record.data() + record.size() / 2, record.size() - record.size() / 2);
             fault_("after_write");
-        } else write(file_, record.data(), record.size());
+        } else write(*io_, file_, record.data(), record.size());
         flush();
         if (fault_) fault_("after_sync");
     }

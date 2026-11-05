@@ -1,4 +1,6 @@
-# Release acceptance record
+# v1.0.0 release acceptance record
+
+This historical acceptance record does not certify the audit remediation working tree. See AUDIT-FOLLOWUP.md for the full remaining scope and current verification.
 
 The six requested implementation stages are complete. Every acceptance below points to executable evidence; publication of the versioned assets is the final release operation.
 
