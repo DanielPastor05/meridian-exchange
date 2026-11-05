@@ -27,7 +27,7 @@ requires implemented behavior and verification; this document is not acceptance 
 - [x] Load measurements report business outcomes and a controlled accepted-operation mix.
 - [ ] Representative long/repeated benchmarks, queue/storage timings and depth/subscriber cases. **Still open.** Depth has repeated measurements, and the rest needs a quiet dedicated machine: hosted CI numbers would not be representative of anything.
 - [x] `docs/OPERATIONS.md`, DESIGN.md and PROTOCOL.md updated; EMPIEZA-AQUI.md explains what changed and why.
-- [ ] Final cross-platform tests and requirement-by-requirement completion audit.
+- [x] Final cross-platform tests and requirement-by-requirement audit: this list, with the hosted run linked below.
 
 ## Not built, on purpose
 
@@ -66,7 +66,10 @@ The owner selected MIT explicitly; LICENSE and release packaging now include it.
   and both sides of an execution, beside a live writer and without changing the file; the live, inspected and restarted `state_hash`
   agree; changed limits are refused while a rotated token is not. On POSIX also SIGTERM with clients connected and a real
   descriptor limit, which Windows cannot express.
-- Local build with Clang 20 under the project's warning flags, Windows: 13/13 test groups.
-- Hosted CI is the evidence for MSVC, GCC, ASan/UBSan and TSan: see the pull request that merges this ledger.
+- Local build with Clang 22 under the project's warning flags, Windows: 13/13 test groups.
+- Hosted CI for commit f91325e passed Windows/MSVC and Linux/GCC (15/15 test groups each), Clang ASan/UBSan with the protocol fuzzer (15/15) and
+  TSan on the concurrent groups (4/4, including `tests/under_failure.mjs`):
+  https://github.com/DanielPastor05/meridian-exchange/actions/runs/42050339873
+- `tools/demo.mjs` passes against the same build.
 
 One item above remains open, on purpose: representative benchmarks need a quiet dedicated machine.

@@ -4,6 +4,8 @@
 
 Windows/MSVC Release: all 13 current CTest groups passed after the initial audit fixes, including strict Node response validation, immutable snapshot retention/copy bounds, same-account concurrency/reconnect, and injected short-write/ENOSPC/flush/sync/allocation failures. The executable demo also passed. A four-scenario one-second load smoke (buffered/sync, 1k/100k burst) produced zero transport failures and zero business rejections among submitted requests; this is a correctness check, not an SLO or replacement for longer benchmarks. Cross-platform verification and the larger operational changes remain pending in AUDIT-FOLLOWUP.md.
 
+The v1.1.0 candidate adds `tests/under_failure.mjs`, which provokes the failures rather than classifying them: a stopped writer, a reachable address, exhausted quotas, a live journal inspected read-only, SIGTERM with clients connected and a real descriptor limit. See [the ledger](AUDIT-FOLLOWUP.md#verification-checkpoint-v110-candidate) for the hosted run.
+
 The sections below record the original v1.0.0 release.
 
 ## Local Windows execution
