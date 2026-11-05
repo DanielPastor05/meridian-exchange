@@ -71,7 +71,7 @@ export function decodeOutcome(payload) {
 function validateResponse(type, payload, pending) {
   const v = values(payload);
   if (type === T.error) {
-    check(v.length === 1 && v[0] >= 1n && v[0] <= 2n, 'invalid error response');
+    check(v.length === 1 && v[0] >= 1n && v[0] <= 3n, 'invalid error response');
     return;
   }
   check(type === (pending.type | 0x8000), 'response type does not match request');

@@ -1,14 +1,17 @@
 #include "meridian/engine.hpp"
 #include "meridian/journal.hpp"
+#include "meridian/service.hpp"
 #include "meridian/text.hpp"
 #include "meridian/version.hpp"
 
 #include <charconv>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 
 using namespace meridian;
 
@@ -57,10 +60,72 @@ void print_book(const Engine& engine) {
     std::cout << "]}\n";
 }
 
+// Rebuilds an account journal's history from the file alone, without a server and without
+// writing anything. The server keeps only the last outcome per account and its feed is a
+// ring, so this is the way to answer what happened to an older request, or to one account's
+// orders. Executions name both sides: a resting order is filled by someone else's request.
+int inspect(const std::filesystem::path& journal, const std::filesystem::path& accounts_file,
+            std::optional<AccountId> only) {
+    const auto accounts = read_accounts(accounts_file);
+    const auto header = scan_journal_requests(journal);
+    if (header.configuration != configuration_hash(accounts))
+        throw std::runtime_error("journal was written under a different account configuration");
+    ExchangeState state(header.capacity, accounts);
+    std::unordered_map<OrderId, AccountId> owners;
+    std::uint64_t seen = 0;
+    const auto owner = [&](OrderId id) {
+        const auto found = owners.find(id);
+        return found == owners.end() ? AccountId{} : found->second;
+    };
+    const auto info = scan_journal_requests(journal, [&](auto sequence, const Request& request) {
+        const auto outcome = state.apply(request, sequence);
+        if (request.command.kind == Kind::New && outcome.code == Code::Accepted)
+            owners[request.command.id] = request.account;
+        if (!only || *only == request.account) {
+            std::cout << "{\"type\":\"outcome\",\"global_sequence\":\"" << outcome.global_sequence
+                      << "\",\"account\":\"" << request.account
+                      << "\",\"request_sequence\":\"" << outcome.request_sequence
+                      << "\",\"order\":\"" << request.command.id
+                      << "\",\"status\":\"" << name(outcome.code)
+                      << "\",\"filled\":\"" << outcome.filled
+                      << "\",\"remaining\":\"" << outcome.remaining
+                      << "\",\"cancelled\":\"" << outcome.cancelled << "\"}\n";
+        }
+        for (;;) {
+            const auto feed = state.feed(seen, 256);
+            if (feed.gap) {
+                // More events from one request than the ring holds. Say so: a silently
+                // shorter list would read as those executions never having happened.
+                std::cout << "{\"type\":\"executions_lost\",\"global_sequence\":\"" << sequence << "\"}\n";
+                seen = feed.latest;
+                break;
+            }
+            if (feed.events.empty()) break;
+            for (const auto& event : feed.events) {
+                seen = event.sequence;
+                if (event.type != 1) continue;
+                const auto maker = owner(event.trade.maker), taker = owner(event.trade.taker);
+                if (only && *only != maker && *only != taker) continue;
+                std::cout << "{\"type\":\"execution\",\"global_sequence\":\"" << event.global_sequence
+                          << "\",\"maker\":\"" << event.trade.maker << "\",\"maker_account\":\"" << maker
+                          << "\",\"taker\":\"" << event.trade.taker << "\",\"taker_account\":\"" << taker
+                          << "\",\"price\":\"" << event.trade.price
+                          << "\",\"quantity\":\"" << event.trade.quantity << "\"}\n";
+            }
+        }
+    });
+    state.verify();
+    std::cout << "{\"type\":\"inspect\",\"records\":" << info.records
+              << ",\"incomplete_tail_bytes\":" << info.incomplete_tail_bytes
+              << ",\"state_hash\":\"" << state.state_hash() << "\"}\n";
+    return 0;
+}
+
 void usage() {
     std::cout << "Meridian Exchange " MERIDIAN_VERSION "\n"
               << "  exchange run --journal PATH [--input FILE] [--capacity N] [--durability sync|buffered]\n"
               << "  exchange replay JOURNAL\n"
+              << "  exchange inspect JOURNAL ACCOUNTS [--account ID]    read-only history of a server journal\n"
               << "Commands: NEW id BUY|SELL price_ticks quantity; CANCEL id; BOOK (one per line).\n"
               << "Default durability is sync. Use a fresh journal for a fresh session.\n";
 }
@@ -83,6 +148,12 @@ int main(int argc, char** argv) {
                       << ",\"incomplete_tail_bytes\":" << replayed.incomplete_tail_bytes << "}\n";
             print_book(engine);
             return 0;
+        }
+        if (std::string_view(argv[1]) == "inspect") {
+            if (argc == 4) return inspect(argv[2], argv[3], std::nullopt);
+            if (argc == 6 && std::string_view(argv[4]) == "--account")
+                return inspect(argv[2], argv[3], number<AccountId>(argv[5]));
+            throw std::invalid_argument("inspect requires a journal and an account file, optionally --account ID");
         }
         if (std::string_view(argv[1]) != "run") throw std::invalid_argument("unknown mode");
         std::filesystem::path path, input_path;

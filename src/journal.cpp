@@ -145,15 +145,24 @@ int JournalIO::sync(std::FILE* file) {
 #endif
 }
 
-JournalInfo scan_journal(const std::filesystem::path& path, const ReplayCallback& consume) {
-    std::FILE* raw = nullptr;
+// Shared for reading on Windows, where _wfopen_s would refuse a file a writer has open.
+static std::FILE* open_for_reading(const std::filesystem::path& path) {
 #ifdef _WIN32
-    if (_wfopen_s(&raw, path.c_str(), L"rb") != 0) throw std::runtime_error("cannot read journal");
+    auto* raw = _wfsopen(path.c_str(), L"rb", _SH_DENYNO);
 #else
-    raw = std::fopen(path.c_str(), "rb");
-    if (!raw) throw std::runtime_error("cannot read journal");
+    auto* raw = std::fopen(path.c_str(), "rb");
 #endif
-    File file(raw);
+    if (!raw) throw std::runtime_error("cannot read journal");
+    return raw;
+}
+
+JournalInfo scan_journal_requests(const std::filesystem::path& path, const RequestCallback& consume) {
+    File file(open_for_reading(path));
+    return scan(file.get(), consume);
+}
+
+JournalInfo scan_journal(const std::filesystem::path& path, const ReplayCallback& consume) {
+    File file(open_for_reading(path));
     return scan(file.get(), [&](auto sequence, const Request& request) {
         if (consume) {
             if (request.account != 0) throw std::runtime_error("account journal requires server replay");

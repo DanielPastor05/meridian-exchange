@@ -18,6 +18,9 @@ struct JournalInfo {
 using ReplayCallback = std::function<void(std::uint64_t, const Command&)>;
 using RequestCallback = std::function<void(std::uint64_t, const Request&)>;
 JournalInfo scan_journal(const std::filesystem::path& path, const ReplayCallback& consume = {});
+// Read-only and safe beside a running writer: it takes no lock, and a record still being
+// written reads as an incomplete tail. Never truncates anything.
+JournalInfo scan_journal_requests(const std::filesystem::path& path, const RequestCallback& consume = {});
 
 // Replaceable OS I/O boundary for short-write, flush and sync fault tests.
 class JournalIO {
