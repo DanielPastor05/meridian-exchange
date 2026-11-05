@@ -85,7 +85,8 @@ if(BUILD_TESTING)
   add_test(NAME crash_recovery COMMAND "${NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/crash.mjs" $<TARGET_FILE:exchange_server>)
   add_test(NAME risk_model COMMAND "${NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/risk_model.mjs" $<TARGET_FILE:exchange_server>)
   add_test(NAME session_concurrency COMMAND "${NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/concurrency.mjs" $<TARGET_FILE:exchange_server>)
-  set_tests_properties(tcp_integration crash_recovery session_concurrency risk_model PROPERTIES TIMEOUT 120)
+  add_test(NAME tcp_integration_under_failure COMMAND "${NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/under_failure.mjs" $<TARGET_FILE:exchange_server>)
+  set_tests_properties(tcp_integration tcp_integration_under_failure crash_recovery session_concurrency risk_model PROPERTIES TIMEOUT 120)
   add_test(NAME cli_roundtrip COMMAND ${CMAKE_COMMAND}
     -DEXCHANGE=$<TARGET_FILE:exchange> -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/cli-test
     -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cli.cmake)

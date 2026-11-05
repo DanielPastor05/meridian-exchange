@@ -75,6 +75,8 @@ int main(int argc, char** argv) {
         std::mutex mutex;
         BookSnapshots snapshots;
         Counters counters;
+        // Published after each request, so Metrics can report it without taking the lock.
+        std::atomic<std::uint64_t> published_sequence{exchange.state().sequence()};
         std::signal(SIGINT,interrupt); std::signal(SIGTERM,interrupt);
         std::cout << "{\"type\":\"ready\",\"port\":" << listener.port << ",\"sequence\":"
                   << exchange.state().sequence() << ",\"durability\":\""
@@ -93,7 +95,21 @@ int main(int argc, char** argv) {
                     bool close_after=false;
                     bool submitted=false;
                     bool target=false;
-                    {
+                    if (account!=0 && (input.type==wire::Ping || input.type==wire::Metrics)) {
+                        // Outside the lock on purpose. A writer stuck in fsync holds the lock, and
+                        // that is exactly when these two have to keep answering: a health check
+                        // queued behind the problem cannot report it.
+                        wire::Reader reader(input.payload);
+                        reader.finish();
+                        if (input.type==wire::Ping) output={static_cast<std::uint16_t>(wire::Ping|0x8000),{}};
+                        else {
+                            wire::Writer out;
+                            for (auto v:{counters.connections.load(),counters.rejected_connections.load(),counters.frames.load(),
+                                         counters.authentication_failures.load(),counters.disconnect_errors.load(),counters.responses.load(),
+                                         published_sequence.load()}) out.u64(v);
+                            output={static_cast<std::uint16_t>(wire::Metrics|0x8000),std::move(out.bytes)};
+                        }
+                    } else {
                         std::lock_guard lock(mutex);
                         wire::Reader reader(input.payload);
                         if (account==0) {
@@ -115,6 +131,7 @@ int main(int argc, char** argv) {
                                 std::cerr << "fatal exchange failure: " << error.what() << '\n';
                                 throw;
                             }
+                            published_sequence.store(exchange.state().sequence());
                             submitted=true;
                         } else if (input.type==wire::Account) {
                             reader.finish(); output=wire::account(account,exchange.state(),wire::Account);
@@ -132,13 +149,6 @@ int main(int argc, char** argv) {
                                 out.u64(o.id);out.u64(static_cast<std::uint64_t>(o.side));out.u64(static_cast<std::uint64_t>(o.price));out.u64(o.quantity);
                             }
                             output={static_cast<std::uint16_t>(wire::Book|0x8000),std::move(out.bytes)};
-                        } else if (input.type==wire::Ping) { reader.finish(); output={static_cast<std::uint16_t>(wire::Ping|0x8000),{}}; }
-                        else if (input.type==wire::Metrics) {
-                            reader.finish(); wire::Writer out;
-                            for (auto v:{counters.connections.load(),counters.rejected_connections.load(),counters.frames.load(),
-                                         counters.authentication_failures.load(),counters.disconnect_errors.load(),counters.responses.load(),
-                                         exchange.state().sequence()}) out.u64(v);
-                            output={static_cast<std::uint16_t>(wire::Metrics|0x8000),std::move(out.bytes)};
                         } else { output=wire::error(1);close_after=true; }
                     }
                     // Socket writes cannot hold up the serialized matching state.

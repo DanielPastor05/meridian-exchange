@@ -1,6 +1,6 @@
 # Meridian Exchange: empieza aquí
 
-El proyecto está en C:\Users\Dani\Documents\meridian-exchange. Está pensado para demostrar ingeniería de sistemas en entrevistas de prácticas: estructuras de datos, redes, contabilidad entera, persistencia, pruebas y medición.
+Está pensado para demostrar ingeniería de sistemas en entrevistas de prácticas: estructuras de datos, redes, contabilidad entera, persistencia, pruebas y medición.
 
 ## Primera ejecución
 
