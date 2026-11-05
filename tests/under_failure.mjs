@@ -104,7 +104,7 @@ async function runningOutOfDescriptorsIsSurvivable() {
   try {
     const limited = path.join(dir, 'limited-server.sh');
     fs.writeFileSync(limited, `#!/bin/sh\nulimit -n 64\nexec "${path.resolve(executable)}" "$@"\n`, {mode: 0o755});
-    server = await start(limited, dir, ['--max-clients', '128', '--timeout-ms', '60000']);
+    server = await start(limited, dir, ['--max-clients', '128', '--timeout-ms', '30000']);
 
     const established = await Client.connect(server.port);
     clients.push(established);
